@@ -42,10 +42,14 @@ jobs:
           name: android-unit-results
           path: companion/android/app/build/test-results/testDebugUnitTest/
   ios:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Compiler versions
+        run: |
+          xcodebuild -version
+          swift --version
       - name: Pure QR parser tests
         run: swift test --package-path companion/ios
       - name: Compile unsigned iPhone simulator app
