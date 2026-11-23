@@ -28,17 +28,18 @@
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 34,
+    "rust_tests_passed": 40,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "CLI only. GUI, clock resource lifecycle and desktop behavior not exercised, as requested by the user.",
+    "visual_test_limitation": "App validation is CLI-only; browser-only reference research was authorized separately. The preview is an offline diagram, not an app screenshot.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-4/VALIDATION.json",
+    "review_validation": "docs/review/iteration-5/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
-    "historical_performance_report": "docs/PERFORMANCE-0.1.2.md"
+    "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
+    "phone_pairing_implemented": false
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -102,11 +103,12 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "65d5788e86c29a55859e341c124780940cd7c7aa0cfdd0feff59c2d19a3f3861",
-    "bytes": 791040
+    "sha256": "5430475bff7aa9997b4b21f8f1e95ec3b01e77d98db338fbf01a98f6f51d2372",
+    "bytes": 799744
   },
   "new_source_files": [
     "src/desktop_clock.rs",
+    "src/navigation.rs",
     "src/profile.rs"
   ],
   "review_methods": [
@@ -114,5 +116,12 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.4"
+  "version": "0.1.5",
+  "visual_reference": {
+    "url": "https://www.instagram.com/p/DgEXHeggzMe/",
+    "product": "Noci Share",
+    "code_reused": false,
+    "assets_reused": false,
+    "original_repository": null
+  }
 }

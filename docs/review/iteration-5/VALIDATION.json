@@ -1,0 +1,72 @@
+{
+  "version": "0.1.5",
+  "date": "2026-11-23",
+  "compiled": true,
+  "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
+  "unit_tests_passed": 40,
+  "unit_tests_failed": 0,
+  "commands": [
+    "cargo test --locked --offline",
+    "cargo build --release --locked --offline"
+  ],
+  "source_sha256": {
+    "src/anim.rs": "263d4f1965252c29044de039dedd06fbc0b639416a0f91750ae90623e072e666",
+    "src/desktop_clock.rs": "0b99e89fc0fd7382b1669c35e91a13df4ac60ab2fee2b8e16f9fcb4c58dc91f7",
+    "src/droptarget.rs": "e8d7138bdf973494733a146d8482b5a78d8c93bc6159d92df6a0d927efb864ac",
+    "src/gfx.rs": "0e7a48516b91e617d749fb7e793fada447ec777b901d7fa5c2c931de487f26af",
+    "src/http.rs": "9630ee1c4df759ff6999a99909e7342ee0fbf0a8ac606217e5a177521dd152b0",
+    "src/main.rs": "3fb05fe1a34cb8f79ade65b02286f8755051bd2b58250c6fad172417acb9de2e",
+    "src/mascot.rs": "fcb7bf2d9df71e90de87f7ae95fc9614d7c9b03e231b43d195ad9ed463b03f28",
+    "src/navigation.rs": "585cffd4163f5c0745d98d83888046b238b5a1297e86373993c44e98447a4950",
+    "src/pages/calendar.rs": "e209ed8f117fd87427a3ed0d4d9f577a21a8bdb55dee85304743759633554208",
+    "src/pages/claude.rs": "c45d8b1446fa77f9de1c931f25a471ab942654378cb97be4b432d519f59ab385",
+    "src/pages/focus.rs": "f8626d581f31dff030779aa54adb2bb7a6af1d54c2ce67c022ab66c7dfd95a54",
+    "src/pages/football.rs": "8661b26cd740c94f1513fb7ea65085e1a750bd6400c257b0e326ebb957b19934",
+    "src/pages/media.rs": "66acd8df0900d0b11bb49430dc355aa0df0d0b2c92cceac5791c1f9d511d78c6",
+    "src/pages/mod.rs": "78506707661bffb7836ec6a6780e56c40a6393c725823a1acd5df6b2a3aa72b7",
+    "src/pages/notifications.rs": "eb154ce69c1341b08b3043ff184c2fa5de74204b862ae757a4840167c658fe52",
+    "src/pages/settings.rs": "c7ec490fdf43d102795c7afd82c6ef0b89fdfb25ad0f64cd024614e1c684ae80",
+    "src/pages/shelf.rs": "b9245c8996ebba1b0f167fae7be056c4b363699ff9240f9188333f71ca556d16",
+    "src/pages/system.rs": "b785a5701ed78d6dc20c331422a0e0ab5804bf4ad7c4be7b38d9bd2c23f48c39",
+    "src/pages/textfield.rs": "131a1762c2d8c86dc46d3466251f4a8815db984fea6b6aeb0e95da88e2470fea",
+    "src/pages/todo.rs": "21b5feddf82377ffaec65a16b0e3fab202c27afd98fa099c41117b1055a9be5d",
+    "src/pages/weather.rs": "af31f1e8606f3e78725c59a8594db87a55361446891d3a028d66eeb8010e631b",
+    "src/profile.rs": "72d27d7a567dc0dc1115bdc765295ead34c08d22a0e4ad5ab3edbb26d83cec32",
+    "src/shell.rs": "461045380c54ccd6b0efd6b288cc91b9d744787b0e1246ad59de83be754dcf08",
+    "src/store.rs": "a6ee9e04817cdd5b8c9bab89311e0399bca759dcd2e9eb9a53140222d9102f34",
+    "src/theme.rs": "e6eeabde7e910c89a489f6ada872c59c4e3c95bd5f82a82069c1593836974011",
+    "src/worker.rs": "1cf0b0af82305f362651e29aaa1309e4ec1d26208b8d096e4cd3847ffc909ec6"
+  },
+  "build_input_sha256": {
+    "Cargo.toml": "8f6babe6e0c4ff723b09e4c9f322cbd1536030241ec209f4320a6ea62a553eb2",
+    "Cargo.lock": "770f56e4fbff5799a2e558fad75b1665e72321e2ed1542a307a86b2eae9f7912"
+  },
+  "local_log_sha256": {
+    "unit-tests.log": "5112caf570fc4f136fd75c01ca6094d3aad4e274224c5656ec124bb123f6c45c",
+    "release-build.log": "e35b980c682ef40c6a4f219a2bc315b526e9f1f80b4f75ecb10046c2188d3aba"
+  },
+  "binary": {
+    "sha256": "5430475bff7aa9997b4b21f8f1e95ec3b01e77d98db338fbf01a98f6f51d2372",
+    "bytes": 799744
+  },
+  "test_scope": "ordinary synthetic regressions; six navigation tests use pure geometry, key modifiers and icon mappings; all four palettes covered; no GUI main function run",
+  "app_run": false,
+  "gui_complete": false,
+  "performance_measured": false,
+  "native_desktop_automation_used": false,
+  "desktop_settings_changed": false,
+  "browser_research_used": true,
+  "browser_research_scope": "User explicitly requested lookup of the reference in Instagram Saved; browser DOM and video-frame screenshots only, no native desktop control.",
+  "preview_is_actual_app_render": false,
+  "preview_method": "illustrative offline Pillow 12.3 diagram, development tool already installed; not an app dependency",
+  "phone_pairing_implemented": false,
+  "network_listener_started": false,
+  "historical_performance_version": "0.1.2",
+  "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
+  "checks_not_run": [
+    "native icon-bar/hover and keyboard interactions",
+    "Windows rendering, focus, DPI and multi-monitor",
+    "RAM, GPU and latency",
+    "real phone transfer/pairing (backend not implemented)"
+  ]
+}

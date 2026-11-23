@@ -4,7 +4,7 @@ Questo modulo è il primo elemento separato dalla notch verso il desktop coordin
 
 ## Comportamento previsto
 
-Settings > **Desktop clock** salva l'attivazione. Il widget mostra ora in formato 24 ore e data locale, con il preset Original, Graphite o Midnight della notch. Il cambio preset riutilizza la finestra esistente. Per disattivarlo si usa lo stesso interruttore.
+Settings > **Desktop clock** salva l'attivazione. Il widget mostra ora in formato 24 ore e data locale, con il preset della notch, incluso Rose dalla 0.1.5. Il cambio preset riutilizza la finestra esistente. Per disattivarlo si usa lo stesso interruttore.
 
 La prima versione usa una posizione fissa nell'area di lavoro del monitor principale, in alto al centro sotto la notch. Non introduce ancora trascinamento o posizioni personalizzate.
 

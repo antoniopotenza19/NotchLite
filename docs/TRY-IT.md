@@ -3,16 +3,18 @@
 1. Scarica NotchLite-portatile.zip dalla sezione Releases del repository.
 2. Estrai l'intera cartella.
 3. Apri notchlite.exe con un doppio clic. Non serve installare Rust.
-4. Il pannello si apre in alto al centro del monitor principale ed è presente in taskbar/Alt-Tab. Le frecce cambiano pagina.
+4. Il pannello si apre in alto al centro del monitor principale ed è presente in taskbar/Alt-Tab. La barra a icone cambia pagina; il nome della sezione compare sotto il contenuto. Ctrl+Tab/Ctrl+Shift+Tab cambiano pagina fuori dagli editor. Se la barra non entra, restano frecce e puntini.
 5. Escape riduce il pannello alla capsula. Se stai scrivendo, il primo Escape annulla l'editor. La capsula si apre al passaggio del mouse; rilanciare l'EXE o usare Open panel dal menu la apre in modo persistente.
 
 Il profilo iniziale attiva deposito file, attività e timer focus. Settings è l'ultima pagina e permette di abilitare gli altri moduli già presenti. Le funzioni avanzate della roadmap restano da realizzare. L'interfaccia ereditata è attualmente in inglese.
 
-Nella 0.1.3 la prima riga di Settings, **Appearance**, passa fra Original, Graphite e Midnight e salva la scelta. Un profilo nuovo parte da Graphite; un profilo esistente senza questa voce conserva Original. Il cambio riguarda soltanto NotchLite: non applica temi o sfondi di Windows. Vedi [APPEARANCE.md](APPEARANCE.md).
+Nella 0.1.5 la prima riga di Settings, **Appearance**, passa fra Original, Graphite, Midnight e Rose e salva la scelta. Un profilo nuovo parte da Graphite; un profilo esistente senza questa voce conserva Original. Il cambio riguarda soltanto NotchLite: non applica temi o sfondi di Windows. Vedi [APPEARANCE.md](APPEARANCE.md).
 
 La 0.1.4 aggiunge **Desktop clock**, spento di default. Quando vorrai collaudarlo, attivalo in Settings e torna al desktop per vederlo: la prima versione si nasconde quando un'altra app è attiva. Lo stesso interruttore lo disattiva. Posizione fissa sul monitor principale, ora 24 ore e data locale. È un modulo sperimentale non ancora avviato nella GUI; vedi [DESKTOP-CLOCK.md](DESKTOP-CLOCK.md).
 
 Questa build è preparata con test e compilazione da riga di comando. La GUI dei preset e del widget non viene aperta durante la preparazione, per richiesta dell'utente. Resa e interazione richiedono ancora verifica.
+
+Il QR e lo scambio file con Android/iPhone sono ancora un [progetto](PHONE-SHARE.md), non una funzione attiva in questa preview. Non vengono creati listener o collegamenti telefonici.
 
 Per uscire, fai clic destro sulla notch o sull'icona nell'area di notifica, quindi scegli **Exit**. Se l'icona è nascosta, apri le icone nascoste accanto all'orologio. Il menu sulla notch è nuovo nella 0.1.2 e resta da collaudare.
 

@@ -27,6 +27,7 @@ use crate::desktop_clock;
 use crate::droptarget::{self, DropData, DropHandler};
 use crate::gfx::{Align, DrawCtx, Gfx, Point, Rect, TextStyle, Weight};
 use crate::mascot::Mascot;
+use crate::navigation;
 use crate::pages::{self, Host, Mouse, Page};
 use crate::store;
 use crate::theme;
@@ -135,6 +136,7 @@ struct App {
     /// Feature id of each entry in `pages` (same order).
     page_ids: Vec<&'static str>,
     current: usize,
+    nav_hover: Option<usize>,
     battery: Battery,
     minute: u16,
     mascot: Mascot,
@@ -310,6 +312,7 @@ impl App {
                 .unwrap_or(0)
                 .min(self.pages.len() - 1);
             self.keyboard = false;
+            self.nav_hover = None;
         }
         self.refresh_activity();
         self.update_targets();
@@ -433,6 +436,9 @@ impl App {
     }
 
     fn set_expanded(&mut self, expanded: bool) {
+        if !expanded {
+            self.nav_hover = None;
+        }
         if !expanded && self.explicit_panel {
             self.finish_page_edit();
             self.explicit_panel = false;
@@ -491,6 +497,7 @@ impl App {
     }
 
     fn go_to(&mut self, index: usize) {
+        self.nav_hover = None;
         if index == self.current || index >= self.pages.len() {
             return;
         }
@@ -545,7 +552,10 @@ impl App {
         let battery = &self.battery;
         let current = self.current;
         let page_count = self.pages.len();
-        let title = self.pages[current].title();
+        let title_index = self.nav_hover.filter(|&i| i < page_count).unwrap_or(current);
+        let title = self.pages[title_index].title();
+        let nav_hover = self.nav_hover;
+        let page_ids = &self.page_ids;
         let mascot = &self.mascot;
         let pages = &mut self.pages;
 
@@ -585,50 +595,81 @@ impl App {
                 let alpha = ((t - 0.55) / 0.45).clamp(0.0, 1.0);
                 ctx.opacity = alpha;
                 let p = expanded_panel;
-                let header = Rect::new(p.x, 0.0, p.w, theme::HEADER_H);
+                if let Some(nav) = navigation::Layout::new(p, page_count) {
+                    let cy = nav.status.center().y;
+                    draw_battery(ctx, Point { x: nav.status.x + 8.0, y: cy }, battery);
+                    ctx.text(&clock, Rect::new(nav.status.x + 22.0, p.y, 42.0, theme::HEADER_H),
+                             TextStyle::new(11.5, Weight::Semibold, theme::text()));
+                    let date = format!("{} {} {}", DAYS[st.wDayOfWeek as usize % 7], st.wDay,
+                                       MONTHS[(st.wMonth as usize).saturating_sub(1) % 12]);
+                    let style = TextStyle::new(10.5, Weight::Regular, theme::text_dim());
+                    let date_w = ctx.measure_text(&date, &style);
+                    if nav.status.w >= date_w + 72.0 {
+                        ctx.text(&date, Rect::new(nav.status.x + 72.0, p.y, date_w, theme::HEADER_H), style);
+                    }
+                    ctx.fill_rect(nav.pill, 12.0, theme::card());
+                    for (i, id) in page_ids.iter().enumerate() {
+                        let Some(tab) = nav.tab(i) else { continue };
+                        if i == current || nav_hover == Some(i) {
+                            ctx.fill_rect(tab, 8.0, theme::card_hover());
+                        }
+                        let color = if i == current { theme::accent() } else { theme::text_dim() };
+                        ctx.text(navigation::glyph(id), tab, TextStyle::icon(11.5, color));
+                        if i == current {
+                            ctx.fill_rect(Rect::new(tab.x + 8.0, tab.bottom() - 3.0, tab.w - 16.0, 2.0),
+                                          1.0, theme::accent());
+                        }
+                    }
+                    // The current/hovered section stays named even with an icon-only header.
+                    ctx.text(&title, Rect::new(p.x + 12.0, p.y + 122.0, p.w - 24.0, 16.0),
+                             TextStyle::new(10.5, Weight::Regular, theme::text_dim()).align(Align::Center));
+                } else {
+                    let header = Rect::new(p.x, 0.0, p.w, theme::HEADER_H);
 
-                ctx.text(&title, Rect::new(p.x + 14.0, 0.0, 110.0, theme::HEADER_H), TextStyle::new(14.5, Weight::Bold, theme::text()));
+                    ctx.text(&title, Rect::new(p.x + 14.0, 0.0, 110.0, theme::HEADER_H), TextStyle::new(14.5, Weight::Bold, theme::text()));
 
-                let date = format!(
-                    "{} {} {} {}",
-                    DAYS[st.wDayOfWeek as usize % 7],
-                    st.wDay,
-                    MONTHS[(st.wMonth as usize).saturating_sub(1) % 12],
-                    st.wYear
-                );
-                let date_style = TextStyle::new(12.5, Weight::Regular, theme::text());
-                let clock_style = TextStyle::new(13.5, Weight::Bold, theme::text());
-                let date_w = ctx.measure_text(&date, &date_style);
-                let clock_w = ctx.measure_text(&clock, &clock_style);
-                let group_w = 16.0 + 8.0 + date_w + 10.0 + clock_w;
-                let mut x = header.center().x - group_w / 2.0;
-                draw_battery(ctx, Point { x: x + 8.0, y: header.h / 2.0 }, battery);
-                x += 24.0;
-                ctx.text(&date, Rect::new(x, 0.0, date_w + 2.0, header.h), date_style);
-                x += date_w + 10.0;
-                ctx.text(&clock, Rect::new(x, 0.0, clock_w + 2.0, header.h), clock_style);
+                    let date = format!(
+                        "{} {} {} {}",
+                        DAYS[st.wDayOfWeek as usize % 7],
+                        st.wDay,
+                        MONTHS[(st.wMonth as usize).saturating_sub(1) % 12],
+                        st.wYear
+                    );
+                    let date_style = TextStyle::new(12.5, Weight::Regular, theme::text());
+                    let clock_style = TextStyle::new(13.5, Weight::Bold, theme::text());
+                    let date_w = ctx.measure_text(&date, &date_style);
+                    let clock_w = ctx.measure_text(&clock, &clock_style);
+                    let group_w = 16.0 + 8.0 + date_w + 10.0 + clock_w;
+                    let mut x = header.center().x - group_w / 2.0;
+                    draw_battery(ctx, Point { x: x + 8.0, y: header.h / 2.0 }, battery);
+                    x += 24.0;
+                    ctx.text(&date, Rect::new(x, 0.0, date_w + 2.0, header.h), date_style);
+                    x += date_w + 10.0;
+                    ctx.text(&clock, Rect::new(x, 0.0, clock_w + 2.0, header.h), clock_style);
 
-                // Arrows.
-                let cy = body.center().y;
-                for (cx, glyph) in [(p.x + theme::ARROW_INSET, "\u{E76B}"), (p.right() - theme::ARROW_INSET, "\u{E76C}")] {
-                    let c = Point { x: cx, y: cy };
-                    ctx.fill_circle(c, theme::ARROW_RADIUS, theme::card_hover());
-                    let r = Rect::new(cx - 10.0, cy - 10.0, 20.0, 20.0);
-                    ctx.text(glyph, r, TextStyle::icon(9.0, theme::text()));
-                }
+                    // Arrows.
+                    let cy = body.center().y;
+                    for (cx, glyph) in [(p.x + theme::ARROW_INSET, "\u{E76B}"), (p.right() - theme::ARROW_INSET, "\u{E76C}")] {
+                        let c = Point { x: cx, y: cy };
+                        ctx.fill_circle(c, theme::ARROW_RADIUS, theme::card_hover());
+                        let r = Rect::new(cx - 10.0, cy - 10.0, 20.0, 20.0);
+                        ctx.text(glyph, r, TextStyle::icon(9.0, theme::text()));
+                    }
 
-                // Page dots.
-                let total_w = (page_count as f32 - 1.0) * (theme::DOT_SIZE + theme::DOT_GAP) + theme::DOT_ACTIVE_W;
-                let mut dx = p.center().x - total_w / 2.0;
-                for i in 0..page_count {
-                    let (w, color) = if i == current {
-                        (theme::DOT_ACTIVE_W, theme::text())
-                    } else {
-                        (theme::DOT_SIZE, theme::text_faint())
-                    };
-                    let r = Rect::new(dx, theme::DOTS_Y - theme::DOT_SIZE / 2.0, w, theme::DOT_SIZE);
-                    ctx.fill_rect(r, theme::DOT_SIZE / 2.0, color);
-                    dx += w + theme::DOT_GAP;
+                    // Page dots.
+                    let total_w = (page_count as f32 - 1.0) * (theme::DOT_SIZE + theme::DOT_GAP) + theme::DOT_ACTIVE_W;
+                    let mut dx = p.center().x - total_w / 2.0;
+                    for i in 0..page_count {
+                        let (w, color) = if i == current {
+                            (theme::DOT_ACTIVE_W, theme::text())
+                        } else {
+                            (theme::DOT_SIZE, theme::text_faint())
+                        };
+                        let r = Rect::new(dx, theme::DOTS_Y - theme::DOT_SIZE / 2.0, w, theme::DOT_SIZE);
+                        ctx.fill_rect(r, theme::DOT_SIZE / 2.0, color);
+                        dx += w + theme::DOT_GAP;
+                    }
+
                 }
 
                 // Current page, sliding in during page changes.
@@ -643,6 +684,9 @@ impl App {
     }
 
     fn arrow_hit(&self, pt: Point) -> Option<isize> {
+        if navigation::Layout::new(self.expanded_panel(), self.pages.len()).is_some() {
+            return None;
+        }
         let p = self.expanded_panel();
         let cy = self.body().center().y;
         let hit = |cx: f32| (pt.x - cx).hypot(pt.y - cy) <= theme::ARROW_RADIUS + 6.0;
@@ -656,6 +700,9 @@ impl App {
     }
 
     fn dot_hit(&self, pt: Point) -> Option<usize> {
+        if navigation::Layout::new(self.expanded_panel(), self.pages.len()).is_some() {
+            return None;
+        }
         if (pt.y - theme::DOTS_Y).abs() > 7.0 {
             return None;
         }
@@ -721,8 +768,14 @@ impl App {
             }
             self.set_expanded(true);
         }
-        if self.is_expanded() && self.page_mouse(Mouse::Move(pt)) && !self.animating {
-            self.redraw();
+        if self.is_expanded() {
+            let hit = navigation::Layout::new(self.expanded_panel(), self.pages.len()).and_then(|nav| nav.hit(pt));
+            let hover_changed = hit != self.nav_hover;
+            self.nav_hover = hit;
+            let redraw = self.page_mouse(Mouse::Move(pt));
+            if (redraw || hover_changed) && !self.animating {
+                self.redraw();
+            }
         }
     }
 
@@ -731,7 +784,8 @@ impl App {
     /// re-checks the real cursor position.
     fn on_mouse_leave(&mut self) {
         self.hovering = false;
-        let redraw = self.page_mouse(Mouse::Leave);
+        let nav_changed = self.nav_hover.take().is_some();
+        let redraw = self.page_mouse(Mouse::Leave) || nav_changed;
         unsafe {
             SetTimer(self.hwnd, TIMER_COLLAPSE, 250, None);
         }
@@ -757,6 +811,11 @@ impl App {
             return;
         }
         if down {
+            if let Some(i) = navigation::Layout::new(self.expanded_panel(), self.pages.len()).and_then(|nav| nav.hit(pt)) {
+                self.nav_hover = None;
+                self.go_to(i);
+                return;
+            }
             if let Some(dir) = self.arrow_hit(pt) {
                 let n = self.pages.len() as isize;
                 let next = (self.current as isize + dir).rem_euclid(n) as usize;
@@ -875,6 +934,16 @@ impl App {
     }
 
     fn on_key(&mut self, vk: u16) {
+        if !self.keyboard && !self.pages[self.current].editing() && self.is_expanded() {
+            let ctrl = unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0;
+            let shift = unsafe { GetKeyState(VK_SHIFT.0 as i32) } < 0;
+            if let Some(step) = navigation::key_step(vk, ctrl, shift) {
+                let next = (self.current as isize + step).rem_euclid(self.pages.len() as isize) as usize;
+                self.nav_hover = None;
+                self.go_to(next);
+                return;
+            }
+        }
         // Escape first cancels an active editor; a subsequent Escape returns
         // an explicitly opened panel to its normal low-distraction capsule.
         if vk == VK_ESCAPE.0 && self.explicit_panel && !self.keyboard {
@@ -1301,6 +1370,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             pages: Vec::new(),
             page_ids: Vec::new(),
             current: 0,
+            nav_hover: None,
             battery: read_battery(),
             minute: GetLocalTime().wMinute,
             mascot: Mascot::new(),

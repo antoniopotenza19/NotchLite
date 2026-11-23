@@ -340,7 +340,7 @@ mod tests {
     fn appearance_cycles_and_changes_no_other_preference() {
         let base = sample_map();
         let mut current = base.clone();
-        for expected in ["graphite", "midnight", "original", "graphite"] {
+        for expected in ["graphite", "midnight", "rose", "original", "graphite"] {
             current = changed_settings(current, Kind::Appearance);
             let mut complete_expected = base.clone();
             complete_expected.insert(theme::PRESET_KEY.to_string(), expected.to_string());

@@ -14,6 +14,9 @@ Version 0.1.3 adds shared native appearance presets, persistence feedback and
 fallible settings reloads that preserve the active configuration on read errors.
 Version 0.1.4 adds an opt-in native GDI clock window, independent of the notch.
 The clock implementation is an original addition to this fork.
+Version 0.1.5 adds a native icon navigation bar, local keyboard page switching
+and the Rose palette. Noci Share is a visual reference; no Noci code or assets
+are included. The mobile file-sharing backend is not implemented.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources

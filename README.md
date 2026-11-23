@@ -6,15 +6,17 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.4 supera 34 test unitari: vedi [validazione](docs/review/iteration-4/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.5 supera 40 test unitari: vedi [validazione](docs/review/iteration-5/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
 
-Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.4 è stata preparata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
+Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.5 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, navigazione, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
 
-**Aspetto della notch:** tre preset nativi selezionabili in Settings > Appearance: Original, Graphite e Midnight. Colori condivisi fra pannello, pagine e controlli, etichette più leggibili e segnalazione degli errori di salvataggio. Nessun nuovo worker o dipendenza. [Palette e limiti](docs/APPEARANCE.md), [revisione dei preset](docs/review/iteration-3/REVIEW.md).
+**Aspetto della notch:** quattro preset in Settings > Appearance: Original, Graphite, Midnight e Rose. La nuova barra a icone rende direttamente selezionabili le pagine abilitate; nome della sezione leggibile sotto il contenuto e Ctrl+Tab/Ctrl+Shift+Tab fuori dagli editor. Il riferimento visivo è Noci Share, con implementazione e risorse del nostro fork. [Navigazione e schema offline](docs/MODERN-NAVIGATION.md), [palette](docs/APPEARANCE.md), [revisione](docs/review/iteration-5/REVIEW.md).
+
+**Telefono:** definito il [flusso browser Android e iPhone](docs/PHONE-SHARE.md) per QR e scambio file con accettazione sul PC. Il backend non è implementato: questa versione non associa telefoni, non apre listener e non trasferisce file al cellulare. Occorre risolvere origine autenticata, trasporto e compatibilità browser prima di implementarlo.
 
 **Orologio indipendente:** la 0.1.4 aggiunge Settings > Desktop clock, disattivato di default. Usa una finestra GDI, il timer già presente e i colori del preset. Ora 24 ore e data locale, posizione fissa sul monitor principale; si mostra solo quando il desktop è attivo e lascia passare i clic. Non è ancora un widget ancorato dietro le icone. [Comportamento e limiti](docs/DESKTOP-CLOCK.md), [revisione del modulo](docs/review/iteration-4/REVIEW.md).
 
-La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.4 e il nuovo orologio non sono stati misurati.
+La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.5 e l'orologio non sono stati misurati.
 
 **Obiettivo visivo:** personalizzare anche il desktop nel suo insieme. Il primo orologio è un modulo sperimentale da collaudare; barra/dock, sfondo coordinato, vetro e altri widget sono ancora da implementare. Vedi [esperienza desktop completa](docs/DESKTOP-EXPERIENCE.md).
 

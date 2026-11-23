@@ -5,10 +5,10 @@ Local AST only. No application code, LLM backend or network command was run by t
 # Graph Report - src  (2026-11-23)
 
 ## Corpus Check
-- Corpus is ~39,992 words - fits in a single context window. You may not need a graph.
+- Corpus is ~41,140 words - fits in a single context window. You may not need a graph.
 
 ## Summary
-- 1001 nodes · 2347 edges · 24 communities (23 shown, 1 thin omitted)
+- 1019 nodes · 2388 edges · 25 communities (24 shown, 1 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 13 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -23,9 +23,9 @@ Local AST only. No application code, LLM backend or network command was run by t
 - [[_COMMUNITY_calendar|calendar]]
 - [[_COMMUNITY_weather|weather]]
 - [[_COMMUNITY_focus|focus]]
+- [[_COMMUNITY_notifications|notifications]]
 - [[_COMMUNITY_settings|settings]]
 - [[_COMMUNITY_todo|todo]]
-- [[_COMMUNITY_notifications|notifications]]
 - [[_COMMUNITY_mascot|mascot]]
 - [[_COMMUNITY_claude|claude]]
 - [[_COMMUNITY_theme|theme]]
@@ -33,6 +33,7 @@ Local AST only. No application code, LLM backend or network command was run by t
 - [[_COMMUNITY_system|system]]
 - [[_COMMUNITY_profile|profile]]
 - [[_COMMUNITY_mod|mod]]
+- [[_COMMUNITY_navigation|navigation]]
 - [[_COMMUNITY_worker|worker]]
 - [[_COMMUNITY_http|http]]
 - [[_COMMUNITY_anim|anim]]
@@ -80,7 +81,7 @@ Local AST only. No application code, LLM backend or network command was run by t
 - 1-file cycle: `src/store.rs -> src/store.rs`
 - 1-file cycle: `src/worker.rs -> src/worker.rs`
 
-## Communities (24 total, 1 thin omitted)
+## Communities (25 total, 1 thin omitted)
 
 ### Community 0 - "shell"
 Cohesion: 0.05
@@ -122,17 +123,17 @@ Nodes (38): FnMut, a_stop_before_start_prevents_the_first_refresh(), as_f32(), e
 Cohesion: 0.11
 Nodes (20): Btn, FocusPage, format_mm_ss(), Layout, LocalDate, Phase, State, Activity (+12 more)
 
-### Community 10 - "settings"
+### Community 10 - "notifications"
+Cohesion: 0.11
+Nodes (28): EventGuard, Item, layout(), Msg, NotificationsPage, now_secs(), parse(), relative() (+20 more)
+
+### Community 11 - "settings"
 Cohesion: 0.13
 Nodes (26): a_failed_save_does_not_apply_the_selection_and_a_retry_can_succeed(), appearance_cycles_and_changes_no_other_preference(), changed_settings(), invalid_appearance_uses_original_before_advancing(), is_row_on(), Kind, page(), Row (+18 more)
 
-### Community 11 - "todo"
+### Community 12 - "todo"
 Cohesion: 0.11
 Nodes (17): Hit, Layout, Mode, Task, TodoPage, DrawCtx, Host, Mouse (+9 more)
-
-### Community 12 - "notifications"
-Cohesion: 0.11
-Nodes (28): EventGuard, Item, layout(), Msg, NotificationsPage, now_secs(), parse(), relative() (+20 more)
 
 ### Community 13 - "mascot"
 Cohesion: 0.10
@@ -162,37 +163,41 @@ Nodes (18): File, a_directory_at_the_profile_path_fails_closed(), a_profile_crea
 Cohesion: 0.14
 Nodes (15): Activity, build(), Host, Mouse, Page, Placeholder, Box, DrawCtx (+7 more)
 
-### Community 20 - "worker"
+### Community 20 - "navigation"
+Cohesion: 0.24
+Nodes (13): feature_glyphs_are_static_native_icons_without_a_phone_affordance(), glyph(), hit_testing_selects_every_tab_and_never_the_gaps_or_padding(), invalid_or_overflowing_coordinates_are_not_a_layout(), key_step(), Layout, panel(), Option (+5 more)
+
+### Community 21 - "worker"
 Cohesion: 0.18
 Nodes (13): F, Mutex, drain_commands(), Peek, Color, HWND, Self, String (+5 more)
 
-### Community 21 - "http"
+### Community 22 - "http"
 Cohesion: 0.40
 Nodes (9): encode(), fetch_bytes(), get_bytes(), get_json(), get_string(), Result, String, Value (+1 more)
 
-### Community 23 - "main"
+### Community 24 - "main"
 Cohesion: 0.40
 Nodes (4): Error, main(), Box, Result
 
 ## Knowledge Gaps
-- **149 isolated node(s):** `Self`, `From`, `HFONT`, `RefCell`, `Box` (+144 more)
+- **151 isolated node(s):** `Self`, `From`, `HFONT`, `RefCell`, `Box` (+146 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **1 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `App` connect `shell` to `mascot`?**
-  _High betweenness centrality (0.001) - this node is a cross-community bridge._
-- **Why does `with_app()` connect `shell` to `worker`?**
-  _High betweenness centrality (0.001) - this node is a cross-community bridge._
 - **What connects `Self`, `From`, `HFONT` to the rest of the system?**
-  _149 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _151 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `shell` be split into smaller, more focused modules?**
-  _Cohesion score 0.05349324195697697 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.054254711593375214 - nodes in this community are weakly interconnected._
 - **Should `football` be split into smaller, more focused modules?**
   _Cohesion score 0.07192982456140351 - nodes in this community are weakly interconnected._
 - **Should `gfx` be split into smaller, more focused modules?**
   _Cohesion score 0.06260406260406261 - nodes in this community are weakly interconnected._
 - **Should `media` be split into smaller, more focused modules?**
   _Cohesion score 0.06997408367271381 - nodes in this community are weakly interconnected._
+- **Should `shelf` be split into smaller, more focused modules?**
+  _Cohesion score 0.06554019457245264 - nodes in this community are weakly interconnected._
+- **Should `desktop_clock` be split into smaller, more focused modules?**
+  _Cohesion score 0.08051948051948052 - nodes in this community are weakly interconnected._

@@ -47,6 +47,7 @@ pub enum Preset {
     Original = 0,
     Graphite = 1,
     Midnight = 2,
+    Rose = 3,
 }
 
 impl Preset {
@@ -54,6 +55,7 @@ impl Preset {
         match value {
             Some("graphite") => Self::Graphite,
             Some("midnight") => Self::Midnight,
+            Some("rose") => Self::Rose,
             _ => Self::Original,
         }
     }
@@ -63,6 +65,7 @@ impl Preset {
             Self::Original => "original",
             Self::Graphite => "graphite",
             Self::Midnight => "midnight",
+            Self::Rose => "rose",
         }
     }
 
@@ -71,6 +74,7 @@ impl Preset {
             Self::Original => "Original",
             Self::Graphite => "Graphite",
             Self::Midnight => "Midnight",
+            Self::Rose => "Rose",
         }
     }
 
@@ -78,7 +82,8 @@ impl Preset {
         match self {
             Self::Original => Self::Graphite,
             Self::Graphite => Self::Midnight,
-            Self::Midnight => Self::Original,
+            Self::Midnight => Self::Rose,
+            Self::Rose => Self::Original,
         }
     }
 
@@ -87,6 +92,7 @@ impl Preset {
             Self::Original => &ORIGINAL,
             Self::Graphite => &GRAPHITE,
             Self::Midnight => &MIDNIGHT,
+            Self::Rose => &ROSE,
         }
     }
 }
@@ -113,6 +119,9 @@ const GRAPHITE: Palette = Palette {
 const MIDNIGHT: Palette = Palette {
     bg: rgb(0x11182D), text: rgb(0xF3F1FF), accent: rgb(0xBBA6FF),
 };
+const ROSE: Palette = Palette {
+    bg: rgb(0x21181F), text: rgb(0xFFF2F7), accent: rgb(0xF3A4C8),
+};
 
 // Workers may read an accent for a queued notification. No lock, allocation,
 // file access or background task is needed to select a built-in palette.
@@ -126,6 +135,7 @@ fn palette() -> &'static Palette {
     match ACTIVE_PRESET.load(Ordering::Relaxed) {
         1 => Preset::Graphite.palette(),
         2 => Preset::Midnight.palette(),
+        3 => Preset::Rose.palette(),
         _ => Preset::Original.palette(),
     }
 }
@@ -146,7 +156,7 @@ pub fn blue() -> Color { Color::rgba(0.30, 0.62, 1.0, 1.0) }
 mod tests {
     use super::*;
 
-    const PRESETS: [Preset; 3] = [Preset::Original, Preset::Graphite, Preset::Midnight];
+    const PRESETS: [Preset; 4] = [Preset::Original, Preset::Graphite, Preset::Midnight, Preset::Rose];
 
     #[test]
     fn settings_round_trip_and_unknown_values_preserve_original_appearance() {

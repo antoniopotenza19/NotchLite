@@ -10,7 +10,7 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 | Timer, attività, calendario | Codice ereditato; calendario spento | Aggiungere promemoria ricorrenti, snooze e persistenza |
 | Meteo, orologio e batterie | Parzialmente ereditato | Provare errori rete e batterie periferiche |
 | Cronologia appunti con schede e pin | Da implementare | Limiti memoria/disco e regole contenuti |
-| Invio file al telefono | Da implementare | Trasferimento LAN avviato dall'utente |
+| Invio file al telefono | Specificato il flusso QR/browser Android+iPhone; backend non implementato | Origine browser e trasporto autenticati, consenso PC e streaming con limiti |
 | PC Deck e telecomando telefono | Da implementare | Pairing e companion app separata |
 | Barra alternativa con Start, tray e app | Da implementare | Modulo dedicato e ripristino affidabile |
 | FPS, temperature e statistiche in gioco | Solo statistiche CPU/RAM ereditate | Sorgenti dati e prove con giochi diversi |
@@ -21,12 +21,12 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 | Chat Twitch/YouTube e stato OBS | Da implementare | API ufficiali e autenticazione |
 | Volume, luminosità, Wi-Fi e altri controlli | Non completi nella base | Azioni native e alternative per hardware |
 | Pannello con siti web | Da implementare | Componente caricato solo quando richiesto |
-| Temi e liquid glass | 0.1.3: tre palette native selezionabili in Settings, GUI non provata | Preset desktop coordinato; vetro opzionale con budget GPU |
+| Temi e liquid glass | 0.1.5: quattro palette e barra a icone native; GUI non provata | Collaudo visivo, preset desktop coordinato e vetro opzionale con budget GPU |
 | Lingue e accessibilità | Da sviluppare | Italiano, tastiera, contrasto e UI Automation |
 
 Le fasi comprendono tutte le funzioni sopra; l'ordine serve a mantenere misurabile il costo di ciascuna.
 
-Priorità aggiornata: il risultato visivo completo del desktop viene prima delle integrazioni telefono/streaming. La preview attuale copre soprattutto la notch. Vedere [DESKTOP-EXPERIENCE.md](DESKTOP-EXPERIENCE.md) per barra, sfondo, orologio, widget e profili Leggero/Vetro: sono obiettivi ancora da implementare, non funzioni già presenti.
+Priorità attuali: [navigazione nativa compatta](MODERN-NAVIGATION.md), [scambio file via browser Android e iPhone](PHONE-SHARE.md), poi completamento del [desktop coordinato](DESKTOP-EXPERIENCE.md). La 0.1.5 implementa la navigazione; il pairing richiede ancora scelta del trasporto e backend. Streaming e telecomando completo restano fasi successive. Le fasi qui sotto organizzano le funzioni e i criteri di verifica, senza rinviare il nuovo requisito telefono fino allo streaming.
 
 ## Fase 0 — base e misure
 

@@ -7,6 +7,7 @@ mod droptarget;
 mod gfx;
 mod http;
 mod mascot;
+mod navigation;
 mod pages;
 mod profile;
 mod shell;
