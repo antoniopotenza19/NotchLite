@@ -1,0 +1,169 @@
+{
+  "upstream_revision": "5a1e17f040672a71685872b1b234e01d02a47bb5",
+  "inherited_unchanged_files": [
+    "src/anim.rs",
+    "src/droptarget.rs",
+    "src/gfx.rs",
+    "src/http.rs",
+    "src/mascot.rs",
+    "src/pages/calendar.rs",
+    "src/pages/claude.rs",
+    "src/pages/focus.rs",
+    "src/pages/football.rs",
+    "src/pages/media.rs",
+    "src/pages/mod.rs",
+    "src/pages/notifications.rs",
+    "src/pages/settings.rs",
+    "src/pages/shelf.rs",
+    "src/pages/system.rs",
+    "src/pages/textfield.rs",
+    "src/pages/todo.rs",
+    "src/pages/weather.rs",
+    "src/theme.rs",
+    "src/worker.rs"
+  ],
+  "inherited_modified_files": [
+    "src/main.rs",
+    "src/shell.rs",
+    "src/store.rs"
+  ],
+  "new_files": [
+    "src/profile.rs"
+  ],
+  "tests": [
+    {
+      "path": "src/droptarget.rs",
+      "tests": 2
+    },
+    {
+      "path": "src/pages/football.rs",
+      "tests": 7
+    },
+    {
+      "path": "src/profile.rs",
+      "tests": 1
+    }
+  ],
+  "source_hashes": [
+    {
+      "path": "src/anim.rs",
+      "sha256": "263d4f1965252c29044de039dedd06fbc0b639416a0f91750ae90623e072e666",
+      "lines": 38
+    },
+    {
+      "path": "src/droptarget.rs",
+      "sha256": "31fa04a2923c617725ca3003379f9c3be072101390676514cec8d0d1be424018",
+      "lines": 412
+    },
+    {
+      "path": "src/gfx.rs",
+      "sha256": "0e7a48516b91e617d749fb7e793fada447ec777b901d7fa5c2c931de487f26af",
+      "lines": 701
+    },
+    {
+      "path": "src/http.rs",
+      "sha256": "9630ee1c4df759ff6999a99909e7342ee0fbf0a8ac606217e5a177521dd152b0",
+      "lines": 54
+    },
+    {
+      "path": "src/main.rs",
+      "sha256": "918e6e71765600e0ff7e01e3752c84dc711e3c34fe528ff9a79b9d882210fa1b",
+      "lines": 35
+    },
+    {
+      "path": "src/mascot.rs",
+      "sha256": "fcb7bf2d9df71e90de87f7ae95fc9614d7c9b03e231b43d195ad9ed463b03f28",
+      "lines": 446
+    },
+    {
+      "path": "src/pages/calendar.rs",
+      "sha256": "e84a20b52eb4863a59d2b944445b7e1e1acfa61b4479be82b5570dbeb041ad07",
+      "lines": 512
+    },
+    {
+      "path": "src/pages/claude.rs",
+      "sha256": "d12f46d170a6b5f55fb4ff30e9142827fe69f5746ad2e119e9a4de993b53802d",
+      "lines": 367
+    },
+    {
+      "path": "src/pages/focus.rs",
+      "sha256": "37091361399f8fa692942c3ca81d10094aaba81a891c69a9d837155c3db4abf4",
+      "lines": 436
+    },
+    {
+      "path": "src/pages/football.rs",
+      "sha256": "cdd10611f34602f1bffdcc29a8d6f90e4b6726220b98dbe266b60d92ac6b1b88",
+      "lines": 1366
+    },
+    {
+      "path": "src/pages/media.rs",
+      "sha256": "1c5bca8964d37f19bdf2625c9d3c092c49b6b43810ff5bd480e622be80597f10",
+      "lines": 1055
+    },
+    {
+      "path": "src/pages/mod.rs",
+      "sha256": "66becb4ad7900e2b4cf323bb6ab5919d30cfe7fa72d18a7e3d33f71674d89094",
+      "lines": 215
+    },
+    {
+      "path": "src/pages/notifications.rs",
+      "sha256": "0087dcbe99c2ead06230ac834da7d886231ff0e5c74d9b0f286f1ece88c8941e",
+      "lines": 422
+    },
+    {
+      "path": "src/pages/settings.rs",
+      "sha256": "1b3f917dae226e01477588e6d406f5bb577e28b9c38dc82994e26c1ad6b2bdd3",
+      "lines": 250
+    },
+    {
+      "path": "src/pages/shelf.rs",
+      "sha256": "6fd85dc34d2bd4cd1adfd223c1ed0c4d398159eca0e382917823a24a9b888e2c",
+      "lines": 511
+    },
+    {
+      "path": "src/pages/system.rs",
+      "sha256": "0c77b7e0abc431efcc65caef9f1cb792650bb2c7a4f7d83c1e37bf99e4077a85",
+      "lines": 252
+    },
+    {
+      "path": "src/pages/textfield.rs",
+      "sha256": "0f3cdd3f3007edc093c725c2035505f1fab733211e4f2de9540a88d11759523a",
+      "lines": 135
+    },
+    {
+      "path": "src/pages/todo.rs",
+      "sha256": "09894f4cb11fe456e7cf0acff1b2253316bc8bdad2e41f1df9d1f6278963aaac",
+      "lines": 362
+    },
+    {
+      "path": "src/pages/weather.rs",
+      "sha256": "0619ebbc1e00e5565952db8b9022e60d696eb5f9cf8c9b68ec9aeab0a8e5c566",
+      "lines": 417
+    },
+    {
+      "path": "src/profile.rs",
+      "sha256": "549b94e5cbbeffed39f8d3e69e8d84d63eb321788a677fd8b7cb6ae6ce06197f",
+      "lines": 37
+    },
+    {
+      "path": "src/shell.rs",
+      "sha256": "880929a34d4ec21ba23d0ef6f00081b80f2fe4908ac1033c4230349f0d51a116",
+      "lines": 1174
+    },
+    {
+      "path": "src/store.rs",
+      "sha256": "dbd559ae154e54c16249c5ad8e2876e762af198452941bb4b4ee3f851817f143",
+      "lines": 63
+    },
+    {
+      "path": "src/theme.rs",
+      "sha256": "9d733cb0edfabaa256fbba00df32b8df260d374ffcb555c19125b2d0cfa543ae",
+      "lines": 51
+    },
+    {
+      "path": "src/worker.rs",
+      "sha256": "1cf0b0af82305f362651e29aaa1309e4ec1d26208b8d096e4cd3847ffc909ec6",
+      "lines": 101
+    }
+  ]
+}

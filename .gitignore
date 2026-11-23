@@ -1,4 +1,12 @@
+# Modified for NotchLite: keep builds, measurements and local credentials out of Git.
 target/
+measurements/
 *.tmp
 dist/
 __pycache__/
+*.exe
+*.zip
+.env
+.env.*
+!.env.example
+work/

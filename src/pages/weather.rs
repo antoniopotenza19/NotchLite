@@ -1,7 +1,7 @@
+//! Modified for NotchLite: interruptible refresh wait and explicit shutdown.
 //! Current weather and short-term hourly forecast for the IP-detected location.
 
 use std::sync::mpsc::{self, Receiver};
-use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
@@ -98,24 +98,51 @@ pub struct WeatherPage {
     rx: Receiver<Result<Weather, String>>,
     state: State,
     offline: bool,
+    stop_tx: mpsc::Sender<()>,
+}
+
+/// A stop cancels a sleeping worker and prevents its next refresh. A fetch that
+/// has already started may complete before this cooperative stop is observed.
+fn run_refresh_loop<T>(
+    results: mpsc::Sender<T>,
+    stop: Receiver<()>,
+    mut fetch: impl FnMut() -> (T, Duration),
+    wake: impl Fn(),
+) {
+    loop {
+        if !matches!(stop.try_recv(), Err(mpsc::TryRecvError::Empty)) {
+            return;
+        }
+        let (result, interval) = fetch();
+        if results.send(result).is_err() {
+            return;
+        }
+        wake();
+        if !matches!(stop.recv_timeout(interval), Err(mpsc::RecvTimeoutError::Timeout)) {
+            return;
+        }
+    }
 }
 
 impl WeatherPage {
     pub fn new(waker: Waker) -> Self {
         let (tx, rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
         worker::spawn("weather", move || {
             let mut location: Option<Location> = None;
-            loop {
-                let res = fetch_weather(&mut location);
-                let ok = res.is_ok();
-                if tx.send(res).is_err() {
-                    break;
-                }
-                waker.wake();
-                thread::sleep(if ok { REFRESH_INTERVAL } else { RETRY_INTERVAL });
-            }
+            run_refresh_loop(tx, stop_rx, || {
+                let result = fetch_weather(&mut location);
+                let interval = if result.is_ok() { REFRESH_INTERVAL } else { RETRY_INTERVAL };
+                (result, interval)
+            }, || waker.wake());
         });
-        Self { rx, state: State::Locating, offline: false }
+        Self { rx, state: State::Locating, offline: false, stop_tx }
+    }
+}
+
+impl Drop for WeatherPage {
+    fn drop(&mut self) {
+        let _ = self.stop_tx.send(());
     }
 }
 
@@ -414,4 +441,42 @@ fn fetch_forecast(loc: &Location) -> Result<Weather, String> {
         hourly,
         fetched_at: Instant::now(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn stopping_a_waiting_worker_prevents_a_second_refresh() {
+        let (results_tx, results_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let worker_calls = calls.clone();
+        let handle = std::thread::spawn(move || {
+            run_refresh_loop(results_tx, stop_rx, || {
+                worker_calls.fetch_add(1, Ordering::SeqCst);
+                ((), REFRESH_INTERVAL)
+            }, || {});
+            let _ = finished_tx.send(());
+        });
+        results_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        stop_tx.send(()).unwrap();
+        finished_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        handle.join().unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_stop_before_start_prevents_the_first_refresh() {
+        let (results_tx, results_rx) = mpsc::channel::<()>();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        stop_tx.send(()).unwrap();
+        run_refresh_loop(results_tx, stop_rx,
+            || panic!("cancelled worker must not fetch"), || {});
+        assert!(results_rx.try_recv().is_err());
+    }
 }

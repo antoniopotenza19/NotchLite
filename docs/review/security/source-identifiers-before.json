@@ -1,0 +1,50 @@
+[
+  {
+    "path": "src/droptarget.rs",
+    "sha256": "31fa04a2923c617725ca3003379f9c3be072101390676514cec8d0d1be424018"
+  },
+  {
+    "path": "src/store.rs",
+    "sha256": "dbd559ae154e54c16249c5ad8e2876e762af198452941bb4b4ee3f851817f143"
+  },
+  {
+    "path": "src/http.rs",
+    "sha256": "9630ee1c4df759ff6999a99909e7342ee0fbf0a8ac606217e5a177521dd152b0"
+  },
+  {
+    "path": "src/worker.rs",
+    "sha256": "1cf0b0af82305f362651e29aaa1309e4ec1d26208b8d096e4cd3847ffc909ec6"
+  },
+  {
+    "path": "src/pages/shelf.rs",
+    "sha256": "6fd85dc34d2bd4cd1adfd223c1ed0c4d398159eca0e382917823a24a9b888e2c"
+  },
+  {
+    "path": "src/pages/media.rs",
+    "sha256": "1c5bca8964d37f19bdf2625c9d3c092c49b6b43810ff5bd480e622be80597f10"
+  },
+  {
+    "path": "src/pages/weather.rs",
+    "sha256": "0619ebbc1e00e5565952db8b9022e60d696eb5f9cf8c9b68ec9aeab0a8e5c566"
+  },
+  {
+    "path": "src/pages/notifications.rs",
+    "sha256": "0087dcbe99c2ead06230ac834da7d886231ff0e5c74d9b0f286f1ece88c8941e"
+  },
+  {
+    "path": "src/pages/football.rs",
+    "sha256": "cdd10611f34602f1bffdcc29a8d6f90e4b6726220b98dbe266b60d92ac6b1b88"
+  },
+  {
+    "path": "src/pages/claude.rs",
+    "sha256": "d12f46d170a6b5f55fb4ff30e9142827fe69f5746ad2e119e9a4de993b53802d"
+  },
+  {
+    "path": "src/shell.rs",
+    "sha256": "5f53a38048852777327bb27fbab4e50089511d6bb77e2907bd95fddccf2b8c70"
+  },
+  {
+    "path": "src/pages/mod.rs",
+    "sha256": "66becb4ad7900e2b4cf323bb6ab5919d30cfe7fa72d18a7e3d33f71674d89094"
+  }
+]

@@ -1,0 +1,160 @@
+{
+  "method": "Graphify AST only, local",
+  "source_root": "src",
+  "files": 24,
+  "words": 34946,
+  "nodes": 853,
+  "edges": 1983,
+  "communities": [
+    {
+      "id": 0,
+      "label": "Risultati sportivi",
+      "cohesion": 0.07149122807017544,
+      "node_count": 96
+    },
+    {
+      "id": 1,
+      "label": "Finestra e interazioni",
+      "cohesion": 0.05811965811965812,
+      "node_count": 91
+    },
+    {
+      "id": 2,
+      "label": "Grafica Direct2D",
+      "cohesion": 0.06127206127206127,
+      "node_count": 78
+    },
+    {
+      "id": 3,
+      "label": "Media e testi",
+      "cohesion": 0.06960385042576823,
+      "node_count": 74
+    },
+    {
+      "id": 4,
+      "label": "Deposito e trascinamento",
+      "cohesion": 0.06502816180235535,
+      "node_count": 63
+    },
+    {
+      "id": 5,
+      "label": "Calendario",
+      "cohesion": 0.09351432880844646,
+      "node_count": 52
+    },
+    {
+      "id": 6,
+      "label": "Ingresso drag-and-drop",
+      "cohesion": 0.0975177304964539,
+      "node_count": 48
+    },
+    {
+      "id": 7,
+      "label": "Timer focus",
+      "cohesion": 0.11219512195121951,
+      "node_count": 41
+    },
+    {
+      "id": 8,
+      "label": "Notifiche Windows",
+      "cohesion": 0.10526315789473684,
+      "node_count": 38
+    },
+    {
+      "id": 9,
+      "label": "Lista attivitÃ ",
+      "cohesion": 0.11379800853485064,
+      "node_count": 38
+    },
+    {
+      "id": 10,
+      "label": "Contratto delle pagine",
+      "cohesion": 0.07301587301587302,
+      "node_count": 36
+    },
+    {
+      "id": 11,
+      "label": "Meteo",
+      "cohesion": 0.12222222222222222,
+      "node_count": 36
+    },
+    {
+      "id": 12,
+      "label": "Utilizzo Claude",
+      "cohesion": 0.1425287356321839,
+      "node_count": 30
+    },
+    {
+      "id": 13,
+      "label": "Impostazioni",
+      "cohesion": 0.1476923076923077,
+      "node_count": 26
+    },
+    {
+      "id": 14,
+      "label": "Statistiche del sistema",
+      "cohesion": 0.15942028985507245,
+      "node_count": 24
+    },
+    {
+      "id": 15,
+      "label": "Mascotte",
+      "cohesion": 0.20952380952380953,
+      "node_count": 21
+    },
+    {
+      "id": 16,
+      "label": "Worker e messaggi",
+      "cohesion": 0.16339869281045752,
+      "node_count": 18
+    },
+    {
+      "id": 17,
+      "label": "Persistenza locale",
+      "cohesion": 0.2833333333333333,
+      "node_count": 16
+    },
+    {
+      "id": 18,
+      "label": "Client HTTP",
+      "cohesion": 0.4,
+      "node_count": 10
+    },
+    {
+      "id": 19,
+      "label": "Animazioni",
+      "cohesion": 0.2857142857142857,
+      "node_count": 7
+    },
+    {
+      "id": 20,
+      "label": "Avvio applicazione",
+      "cohesion": 0.4,
+      "node_count": 5
+    },
+    {
+      "id": 21,
+      "label": "Profilo iniziale",
+      "cohesion": 0.6,
+      "node_count": 5
+    }
+  ],
+  "semantic_llm_tokens": {
+    "input": 0,
+    "output": 0
+  },
+  "limitations": [
+    "Not a runtime call graph",
+    "Dynamic dispatch, COM and FFI require manual review",
+    "Cross-file associations may be incomplete",
+    "Clustering is not a runtime boundary"
+  ],
+  "tool": {
+    "distribution": "graphifyy",
+    "version": "0.8.26",
+    "original_repository": "https://github.com/safishamsi/graphify",
+    "license": "MIT",
+    "git_revision": null,
+    "evidence": "installed Python distribution metadata; direct_url.json absent"
+  }
+}

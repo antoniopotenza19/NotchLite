@@ -1,5 +1,6 @@
-//! Plain-text persistence under %APPDATA%\Ada (settings and lists) and
-//! %LOCALAPPDATA%\Ada (caches and the file shelf).
+//! Modified for NotchLite: isolated storage, with no migration of other apps' data.
+//! Plain-text persistence under %APPDATA%\NotchLite (settings and lists) and
+//! %LOCALAPPDATA%\NotchLite (caches and the file shelf).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -8,14 +9,7 @@ use std::path::PathBuf;
 
 fn dir_from_env(var: &str) -> PathBuf {
     let base = std::env::var_os(var).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-    let dir = base.join("Ada");
-    // One-time migration from the old app name.
-    if !dir.exists() {
-        let old = base.join("YESDEV");
-        if old.exists() {
-            let _ = fs::rename(&old, &dir);
-        }
-    }
+    let dir = base.join("NotchLite");
     let _ = fs::create_dir_all(&dir);
     dir
 }

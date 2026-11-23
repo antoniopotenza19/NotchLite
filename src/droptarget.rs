@@ -1,3 +1,4 @@
+//! Modified for NotchLite: validate web links at input and shortcut boundaries.
 //! OLE drop target for the notch window.
 //!
 //! `WM_DROPFILES` only reports the final drop; an `IDropTarget` registered
@@ -198,9 +199,8 @@ impl DropTarget {
             }
             if self.url_format != 0 && has_format(data, self.url_format as u16) {
                 if let Some(text) = read_text(data, self.url_format as u16) {
-                    let url = text.lines().next().unwrap_or("").trim().to_string();
-                    if !url.is_empty() {
-                        return Some(DropData::Url { url, title: None });
+                    if let Some(url) = as_web_url(&text) {
+                        return Some(DropData::Url { url: url.to_string(), title: None });
                     }
                 }
             }
@@ -214,11 +214,27 @@ impl DropTarget {
     }
 }
 
-/// First line of `text` if it is an http(s) URL.
+/// A complete http(s) URL, with no controls, internal whitespace or backslashes.
+/// Do not silently remove controls or take just the first line: that would turn
+/// an invalid or injected clipboard value into a different, accepted URL.
 fn as_web_url(text: &str) -> Option<&str> {
-    let line = text.lines().next()?.trim();
-    let lower = line.get(..8).unwrap_or(line).to_ascii_lowercase();
-    (lower.starts_with("http://") || lower.starts_with("https://")).then_some(line)
+    if text.chars().any(char::is_control) {
+        return None;
+    }
+    let url = text.trim();
+    if url.chars().any(|c| c.is_whitespace() || c == '\\') {
+        return None;
+    }
+    let (scheme, rest) = url.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit('@').next()?;
+    if host.is_empty() || host.starts_with(':') {
+        return None;
+    }
+    Some(url)
 }
 
 // ---- data object helpers ----
@@ -329,11 +345,8 @@ extern "system" {
 /// Writes a Windows `.url` internet shortcut into `dir`, named after `title`
 /// or the URL's host (made filesystem-safe and unique). Returns its path.
 pub fn save_url_shortcut(dir: &Path, url: &str, title: Option<&str>) -> io::Result<PathBuf> {
-    let url: String = url.chars().filter(|c| !c.is_control()).collect();
-    let url = url.trim();
-    if url.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty URL"));
-    }
+    let url = as_web_url(url)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "expected a complete http(s) URL"))?;
     std::fs::create_dir_all(dir)?;
 
     let base = title
@@ -393,13 +406,31 @@ mod tests {
         assert_eq!(host_of("https://www.example.com:8080/a?b#c"), "example.com");
         assert_eq!(sanitize_file_name("a/b:c*?. "), "a_b_c__");
         assert_eq!(sanitize_file_name("con"), "_con");
-        assert_eq!(as_web_url("HTTPS://x.y\nmore"), Some("HTTPS://x.y"));
+        assert_eq!(as_web_url("HTTPS://x.y\nmore"), None);
         assert_eq!(as_web_url("ftp://x"), None);
     }
 
     #[test]
+    fn rejects_non_web_and_injected_shortcut_inputs() {
+        for input in [
+            "file:///C:/example.txt", "custom-protocol:example", "ftp://example.com",
+            "https://example.com\r\nIconFile=example", "https://exam\tple.com",
+            "https://example.com\0ignored", "https://example.com/a b",
+            "https://example.com\\path", "https://", "https://?query", "https://:443/",
+        ] {
+            assert!(as_web_url(input).is_none(), "unexpected acceptance: {input:?}");
+        }
+        assert_eq!(as_web_url(" HTTPS://example.com/a?x=1#top "), Some("HTTPS://example.com/a?x=1#top"));
+        assert_eq!(as_web_url("https://example.com/%0d%0a"), Some("https://example.com/%0d%0a"));
+    }
+
+    #[test]
     fn shortcut_is_unique() {
-        let dir = std::env::temp_dir().join(format!("ada-url-test-{}", std::process::id()));
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("notchlite-url-test-{}-{stamp}", std::process::id()));
+        let error = save_url_shortcut(&dir, "file:///C:/example.txt", None).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(!dir.exists(), "invalid shortcut input must not create a directory");
         let a = save_url_shortcut(&dir, "https://example.com/x", None).unwrap();
         let b = save_url_shortcut(&dir, "https://example.com/y", Some("Example")).unwrap();
         let c = save_url_shortcut(&dir, "https://example.com/z", None).unwrap();

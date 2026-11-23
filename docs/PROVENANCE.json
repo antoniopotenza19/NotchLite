@@ -1,0 +1,65 @@
+{
+  "project": "NotchLite",
+  "prepared_date": "2026-11-23",
+  "upstream": {
+    "repository": "https://github.com/Yemresalcan/ada-notch",
+    "revision": "5a1e17f040672a71685872b1b234e01d02a47bb5",
+    "license": "Apache-2.0",
+    "license_path": "LICENSE",
+    "notices_path": "NOTICE",
+    "license_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "archive_sha256": "7d0a3e323d69b142ec974b2d9dbebaa7d32830b47a3309b509101ce0cc391ef1"
+  },
+  "reference_product": {
+    "url": "https://notchpixel.com/",
+    "source_code_reused": false,
+    "assets_reused": false,
+    "observation": "public feature descriptions; app not executed"
+  },
+  "alternative": {
+    "repository": "https://github.com/vyshnav-suresh/windows-notch",
+    "license": "MIT",
+    "reason_not_selected": "single large C++ translation unit; Ada already separates feature pages"
+  },
+  "validation": {
+    "compiled": true,
+    "rust_tests_executed": true,
+    "app_run": false,
+    "performance_measured": false,
+    "package_integrity_checked": true,
+    "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
+    "rust_tests_passed": 15,
+    "visual_interaction_tested": false,
+    "visual_test_limitation": "overlay not returned as a targetable window by native UI inspection",
+    "performance_report": "docs/benchmarks/base-idle.json",
+    "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
+    "previous_build_app_run": true,
+    "previous_build_performance_measured": true,
+    "review_validation": "docs/review/VALIDATION.json"
+  },
+  "modified_upstream_files": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "NOTICE",
+    "README.md",
+    ".gitignore",
+    ".github/workflows/ci.yml",
+    "src/main.rs",
+    "src/store.rs",
+    "src/shell.rs",
+    "src/droptarget.rs",
+    "src/pages/weather.rs"
+  ],
+  "binary": {
+    "sha256": "0d63447c9e1ca0e5a5ba17a4d042a7b60645f8ab98980ce28ce4ddc83e76757c",
+    "bytes": 760832
+  },
+  "new_source_files": [
+    "src/profile.rs"
+  ],
+  "review_methods": [
+    "three-agent static review with independent verification",
+    "Graphify 0.8.26 already installed; local AST mapping",
+    "Ponytail review checklist read-only; no plugin installed"
+  ]
+}

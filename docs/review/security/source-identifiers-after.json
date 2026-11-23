@@ -1,0 +1,10 @@
+[
+  {
+    "path": "src/droptarget.rs",
+    "sha256": "a76f11d0f05fd13f19403f88ff84ee0d8b2d32fa55693cff9cdf719cc483c5c2"
+  },
+  {
+    "path": "src/pages/weather.rs",
+    "sha256": "9fb2a37ca30c4df7e829c5b0e32e6ca2a9649fd55ea35f676a5d365832610b57"
+  }
+]

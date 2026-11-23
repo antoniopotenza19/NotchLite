@@ -1,0 +1,219 @@
+[
+  {
+    "id": "S1",
+    "title": "Filtro http(s) aggirabile nel formato UniformResourceLocatorW",
+    "status": "confirmed",
+    "priority": null,
+    "trigger": "Una sorgente di drag-and-drop fornisce UniformResourceLocatorW con un valore non vuoto ma non http(s), oppure un URL con caratteri di controllo.",
+    "unauthorizedOutcome": "Prima della correzione il percorso dichiarato per link web ammetteva valori fuori dalla politica http(s) e li materializzava in un file .url. Non è dimostrata esecuzione di codice: l'eventuale attivazione di un protocollo Windows richiede un clic successivo dell'utente e non è stata provata.",
+    "sourceTrace": [
+      {
+        "file": "src/droptarget.rs",
+        "lines": "199-204",
+        "snapshot": "before"
+      },
+      {
+        "file": "src/droptarget.rs",
+        "lines": "331-345",
+        "snapshot": "before"
+      },
+      {
+        "file": "src/shell.rs",
+        "lines": "670-677",
+        "snapshot": "before"
+      },
+      {
+        "file": "src/pages/shelf.rs",
+        "lines": "225-230",
+        "snapshot": "before"
+      }
+    ],
+    "evidence": "Il ramo UniformResourceLocatorW controllava soltanto !url.is_empty(); il ramo CF_UNICODETEXT applicava invece as_web_url. save_url_shortcut eliminava i controlli e scriveva il valore senza validarne lo schema.",
+    "counterevidence": "L'apertura richiede clic esplicito sulla tile. ShellExecuteW riceve un percorso separato dai parametri, non una riga di comando concatenata. Nessuna RCE è confermata e nessuna prova ha avviato handler.",
+    "assumptions": [
+      "Il formato OLE accettato viene fornito da un'app sorgente; nessuna origine privilegiata è richiesta dal codice."
+    ],
+    "validationPerformed": [
+      "Traccia statica di ingresso, writer e sink; verifica sequenziale dei controesempi.",
+      "Revisione della correzione nel sorgente."
+    ],
+    "validationMissing": [
+      "Suite Rust normale da eseguire dal coordinatore.",
+      "Nessun PoC di protocollo o prova GUI: manca sandbox OS per audit runtime."
+    ],
+    "reviewerMode": "sequential-self-check; scenario handler lasciato non validato",
+    "fix": "Applicato: as_web_url unico sui due formati e nel writer; solo schema http/https, authority non vuota, niente controlli, spazi interni o backslash. L'input invalido viene rigettato anziché troncato o ricomposto.",
+    "closureCheck": "Test regressione sintattici + writer prima di qualsiasi creazione di directory; drag normale https e maiuscole preservato. Verifica manuale browser drag rimane aperta.",
+    "remediation": {
+      "state": "source-fix-applied-tests-pending",
+      "files": [
+        "src/droptarget.rs"
+      ],
+      "sourceRefs": [
+        {
+          "file": "src/droptarget.rs",
+          "lines": "200-209"
+        },
+        {
+          "file": "src/droptarget.rs",
+          "lines": "217-238"
+        },
+        {
+          "file": "src/droptarget.rs",
+          "lines": "347-350"
+        }
+      ]
+    }
+  },
+  {
+    "id": "S2",
+    "title": "Il modulo meteo effettuava un refresh di rete dopo la disattivazione",
+    "status": "confirmed",
+    "priority": "P2",
+    "trigger": "L'utente disabilita Weather mentre il worker dorme dopo un refresh.",
+    "unauthorizedOutcome": "Il worker precedente sopravvive e al risveglio esegue ancora fetch_weather verso i provider prima di accorgersi che il receiver è stato eliminato. Il modulo aveva già ricevuto una scelta esplicita di disattivazione.",
+    "sourceTrace": [
+      {
+        "file": "src/pages/weather.rs",
+        "lines": "103-119",
+        "snapshot": "before"
+      },
+      {
+        "file": "src/pages/mod.rs",
+        "lines": "176-209",
+        "snapshot": "before"
+      },
+      {
+        "file": "src/pages/weather.rs",
+        "lines": "334-372",
+        "snapshot": "before"
+      }
+    ],
+    "evidence": "Il ciclo eseguiva fetch prima di tx.send e dormiva 60/900 secondi senza segnale di arresto; WeatherPage non implementava Drop. Disabilitando la pagina il receiver veniva eliminato, senza interrompere sleep o controllare prima del fetch seguente.",
+    "counterevidence": "Le pagine disabilitate non vengono create al primo avvio. Il problema riguarda un modulo precedentemente abilitato. Una richiesta già in corso non può essere annullata dal solo drop del receiver.",
+    "assumptions": [
+      "Il toggle disabilita il modulo tramite ricostruzione della lista pagine.",
+      "Il worker si trova nel tratto di attesa, non in una richiesta già in corso."
+    ],
+    "validationPerformed": [
+      "Traccia statica del ciclo e del lifecycle pagine.",
+      "Corroborazione indipendente da /root/quality_audit, che ha individuato lo stesso difetto come qualità/lifecycle.",
+      "Revisione statica della correzione."
+    ],
+    "validationMissing": [
+      "Test Rust normali e prova reti controllate non eseguiti da questo revisore.",
+      "Nessuna riproduzione con rete reale o credential live."
+    ],
+    "reviewerMode": "independent-corroboration /root/quality_audit; static-only",
+    "fix": "Applicato: stop channel posseduto dalla pagina; Drop invia stop; run_refresh_loop verifica stop prima del fetch e usa recv_timeout per un'attesa interrompibile.",
+    "closureCheck": "Due regressioni pure: stop già presente impedisce il primo refresh; stop dopo il primo risultato termina il worker senza un secondo fetch e senza aspettare 15 minuti.",
+    "remediation": {
+      "state": "source-fix-applied-tests-pending",
+      "files": [
+        "src/pages/weather.rs"
+      ],
+      "sourceRefs": [
+        {
+          "file": "src/pages/weather.rs",
+          "lines": "97-146"
+        }
+      ],
+      "residual": "Arresto cooperativo: un fetch che ha già superato il controllo di stop può completarsi; nessuna cancellazione WinRT in-flight è implementata."
+    }
+  },
+  {
+    "id": "S3",
+    "title": "Limiti applicativi di risposta HTTP e decodifica immagini da verificare",
+    "status": "needs-validation",
+    "trigger": "Un provider risponde con un corpo molto grande, un download lento o un'immagine piccola compressa ma con dimensioni decodificate elevate.",
+    "unauthorizedOutcome": "Possibile crescita eccessiva di memoria, blocco dei worker o consumo GPU. Nessun esaurimento sfruttabile o dimensione massima effettiva è stato dimostrato.",
+    "sourceTrace": [
+      {
+        "file": "src/http.rs",
+        "lines": "9-41"
+      },
+      {
+        "file": "src/pages/media.rs",
+        "lines": "397-410"
+      },
+      {
+        "file": "src/pages/football.rs",
+        "lines": "591-611"
+      },
+      {
+        "file": "src/gfx.rs",
+        "lines": "686-700"
+      }
+    ],
+    "evidence": "GetStringAsync/GetBufferAsync completano il buffering prima della restituzione. Il codice non impone un budget byte o timeout/cancellazione propri. L'art media ha cap 8 MiB compressi; il decoder WIC non ha un limite di pixel applicativo visibile.",
+    "counterevidence": "Gli endpoint sono fissi e HTTPS. Windows/WinRT/Direct2D possono già imporre limiti o fallire in anticipo. I limiti del provider e del decoder non sono stati verificati; la cache media limita il numero di voci.",
+    "assumptions": [
+      "Un endpoint o metadato raggiungibile può produrre un caso patologico entro i propri vincoli reali."
+    ],
+    "validationPerformed": [
+      "Ispezione statica dei punti di buffering, cache e decodifica."
+    ],
+    "validationMissing": [
+      "Limiti reali del provider, comportamento WinRT e Direct2D sotto budget in sandbox senza rete.",
+      "Prova con risposte sintetiche e contatori di memoria."
+    ],
+    "reviewerMode": "sequential-self-check",
+    "fix": "Non applicato, fuori dalle correzioni minime assegnate. Proporre HTTP con lettura a blocchi, budget per risorsa, timeout/cancellazione; controllare dimensioni WIC prima della creazione bitmap e limitare cache in byte.",
+    "closureCheck": "In ambiente isolato, risposte oltre budget vengono rifiutate prima di grandi allocazioni e i worker terminano entro un timeout documentato."
+  },
+  {
+    "id": "R1",
+    "title": "Ipotesi di command injection nel deposito file non confermata",
+    "status": "rejected",
+    "trigger": "Un percorso o nome di file trascinato contiene caratteri speciali per una shell.",
+    "unauthorizedOutcome": "Ipotesi: concatenazione del percorso in un comando eseguibile arbitrario.",
+    "sourceTrace": [
+      {
+        "file": "src/pages/shelf.rs",
+        "lines": "225-230"
+      },
+      {
+        "file": "src/droptarget.rs",
+        "lines": "339-358",
+        "snapshot": "before"
+      }
+    ],
+    "evidence": "È stato seguito il sink di apertura.",
+    "counterevidence": "Il codice invoca ShellExecuteW con verbo e percorso come argomenti distinti; non usa cmd.exe, PowerShell o una riga di comando concatenata. Il file si apre su clic, comportamento previsto del deposito.",
+    "assumptions": [],
+    "validationPerformed": [
+      "Ispezione del sink e dei chiamanti."
+    ],
+    "validationMissing": [],
+    "reviewerMode": "sequential-self-check",
+    "fix": "Nessuna correzione per command injection; mantenere distinta l'ipotesi di schema non web S1.",
+    "closureCheck": "Riesaminare se in futuro si introduce un launcher con comandi o parametri configurabili."
+  },
+  {
+    "id": "R2",
+    "title": "Ipotesi di path traversal tramite team ESPN non confermata",
+    "status": "rejected",
+    "trigger": "Un team ID contiene separatori di percorso o segmenti parent.",
+    "unauthorizedOutcome": "Ipotesi: scrittura cache crest fuori dalla directory prevista o cambio host della richiesta.",
+    "sourceTrace": [
+      {
+        "file": "src/pages/football.rs",
+        "lines": "593-610"
+      },
+      {
+        "file": "src/pages/football.rs",
+        "lines": "935-942"
+      }
+    ],
+    "evidence": "Controllati configurazione team e nome del file cache.",
+    "counterevidence": "L'ID configurato e quello usato in load_crest ammettono solo cifre ASCII non vuote; gli host sono costanti. L'event ID nella query summary viene percent-encoded.",
+    "assumptions": [],
+    "validationPerformed": [
+      "Traccia statica guard→percorso/URL."
+    ],
+    "validationMissing": [],
+    "reviewerMode": "sequential-self-check",
+    "fix": "Nessuna correzione necessaria per questa ipotesi; restano da valutare limiti lunghezza/dimensione come hardening.",
+    "closureCheck": "Conservare i guard se cambia il formato degli ID."
+  }
+]

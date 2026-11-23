@@ -1,5 +1,13 @@
 Ada — Copyright 2026 Yunus Emre Salcan. Licensed under the Apache License 2.0.
 
+NotchLite is a modified distribution of Ada, based on upstream revision
+5a1e17f040672a71685872b1b234e01d02a47bb5. Modified 2026-11-23.
+Changes: separate application identity/storage, opt-in first-run settings,
+mascot timer lifecycle, animation interval, measurement tooling and project docs.
+Original attribution and third-party notices are retained below.
+Further NotchLite changes: reentrant window shutdown, isolated startup setting,
+UTF-16 input, editor focus lifecycle, web-link validation and weather cancellation.
+
 ========================================================================
 Third-Party Notices, Assets, and Data Sources
 ========================================================================

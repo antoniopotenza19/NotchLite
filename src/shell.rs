@@ -1,3 +1,5 @@
+// Modified for NotchLite: isolated identity, opt-in mascot timer, 16 ms transitions,
+// reentrant shutdown, Unicode input and page-edit lifecycle corrections.
 //! The notch window: geometry and animation, header, page navigation, input
 //! routing, file drops and the tray icon.
 
@@ -41,7 +43,7 @@ const MENU_MASCOT: usize = 3;
 const MENU_MINIMAL: usize = 4;
 const SETTINGS_FILE: &str = "settings.txt";
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-const RUN_VALUE: PCWSTR = w!("Ada");
+const RUN_VALUE: PCWSTR = w!("NotchLite");
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -49,6 +51,31 @@ const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Au
 struct Battery {
     percent: Option<u8>,
     plugged: bool,
+}
+
+/// WM_CHAR carries UTF-16 code units, not Unicode scalar values.
+#[derive(Default)]
+struct Utf16Input {
+    high_surrogate: Option<u16>,
+}
+
+impl Utf16Input {
+    fn push(&mut self, unit: u16) -> Option<char> {
+        match unit {
+            0xD800..=0xDBFF => {
+                self.high_surrogate = Some(unit);
+                None
+            }
+            0xDC00..=0xDFFF => self.high_surrogate.take().and_then(|high| {
+                let scalar = 0x10000 + ((u32::from(high) - 0xD800) << 10) + (u32::from(unit) - 0xDC00);
+                char::from_u32(scalar)
+            }),
+            _ => {
+                self.high_surrogate = None;
+                char::from_u32(u32::from(unit))
+            }
+        }
+    }
 }
 
 fn read_battery() -> Battery {
@@ -77,7 +104,7 @@ struct App {
     page_shift: Spring,
     last_frame: Instant,
     animating: bool,
-    /// Current TIMER_ANIM period: 1 ms while springs move, ~30 fps for ambient
+    /// Current TIMER_ANIM period: 16 ms while springs move, ~30 fps for ambient
     /// animation only (audio bars, mascot).
     anim_interval: u32,
     /// Last window region applied, to skip redundant SetWindowRgn calls.
@@ -86,6 +113,7 @@ struct App {
     hidden_for_fullscreen: bool,
     hovering: bool,
     keyboard: bool,
+    input_utf16: Utf16Input,
     pages: Vec<Box<dyn Page>>,
     /// Feature id of each entry in `pages` (same order).
     page_ids: Vec<&'static str>,
@@ -239,6 +267,7 @@ impl App {
     fn reload_settings(&mut self) {
         let settings = store::read_kv(SETTINGS_FILE);
         self.mascot_enabled = settings.get("mascot").map_or(true, |v| v != "0");
+        self.sync_mascot_timer();
         self.minimal = settings.get("minimal").is_some_and(|v| v == "1");
         let disabled: Vec<String> = settings
             .get(pages::DISABLED_KEY)
@@ -353,7 +382,7 @@ impl App {
             self.animating = true;
             self.last_frame = Instant::now();
         }
-        self.set_anim_interval(1);
+        self.set_anim_interval(16);
     }
 
     fn set_expanded(&mut self, expanded: bool) {
@@ -372,6 +401,8 @@ impl App {
         if index == self.current || index >= self.pages.len() {
             return;
         }
+        // Commit the outgoing editor before keyboard input is routed elsewhere.
+        self.finish_page_edit();
         let direction = if index > self.current { 1.0 } else { -1.0 };
         self.current = index;
         self.page_shift.snap(direction);
@@ -548,6 +579,7 @@ impl App {
         let redraw = self.pages[self.current].on_mouse(ev, area, &mut host);
         if host.want_keyboard && !self.keyboard {
             self.keyboard = true;
+            self.input_utf16 = Utf16Input::default();
             unsafe {
                 let _ = SetForegroundWindow(self.hwnd);
                 let _ = SetFocus(self.hwnd);
@@ -715,12 +747,17 @@ impl App {
         }
     }
 
+    fn finish_page_edit(&mut self) {
+        self.keyboard = false;
+        self.input_utf16 = Utf16Input::default();
+        self.pages[self.current].on_focus_lost();
+    }
+
     fn end_keyboard(&mut self) {
         if !self.keyboard {
             return;
         }
-        self.keyboard = false;
-        self.pages[self.current].on_focus_lost();
+        self.finish_page_edit();
         if !self.hovering && !self.pinned {
             self.set_expanded(false);
         }
@@ -784,10 +821,21 @@ impl App {
         self.mascot.update(dt, idle_ms, eligible, cursor)
     }
 
+    /// Arms the idle poll only while the optional mascot is enabled.
+    fn sync_mascot_timer(&self) {
+        unsafe {
+            if self.mascot_enabled {
+                SetTimer(self.hwnd, TIMER_MASCOT, 500, None);
+            } else {
+                let _ = KillTimer(self.hwnd, TIMER_MASCOT);
+            }
+        }
+    }
+
     /// Polls idle time twice a second while no animation is running, so the
     /// mascot can appear after 15 s of inactivity.
     fn on_mascot_timer(&mut self) {
-        if !self.animating && self.step_mascot() {
+        if self.mascot_enabled && !self.animating && self.step_mascot() {
             self.start_animation();
         }
     }
@@ -798,7 +846,7 @@ impl App {
             let startup_flags = if startup_enabled() { MF_STRING | MF_CHECKED } else { MF_STRING };
             let _ = AppendMenuW(menu, startup_flags, MENU_STARTUP, w!("Start with Windows"));
             let mascot_flags = if self.mascot_enabled { MF_STRING | MF_CHECKED } else { MF_STRING };
-            let _ = AppendMenuW(menu, mascot_flags, MENU_MASCOT, w!("Ada Mascot"));
+            let _ = AppendMenuW(menu, mascot_flags, MENU_MASCOT, w!("Mascot"));
             let minimal_flags = if self.minimal { MF_STRING | MF_CHECKED } else { MF_STRING };
             let _ = AppendMenuW(menu, minimal_flags, MENU_MINIMAL, w!("Minimal notch"));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
@@ -904,8 +952,6 @@ fn startup_enabled() -> bool {
 
 fn set_startup(enable: bool) {
     unsafe {
-        // Legacy name.
-        let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_KEY, w!("YESDEV"));
         if enable {
             let Ok(exe) = std::env::current_exe() else { return };
             let value: Vec<u16> = format!("\"{}\"", exe.display()).encode_utf16().chain(Some(0)).collect();
@@ -950,7 +996,7 @@ fn add_tray_icon(hwnd: HWND) {
             hIcon: app_icon(),
             ..Default::default()
         };
-        for (dst, src) in nid.szTip.iter_mut().zip("Ada".encode_utf16()) {
+        for (dst, src) in nid.szTip.iter_mut().zip("NotchLite".encode_utf16()) {
             *dst = src;
         }
         let _ = Shell_NotifyIconW(NIM_ADD, &nid);
@@ -991,6 +1037,17 @@ fn point_from_lparam(lparam: LPARAM, scale: f32) -> Point {
 }
 
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // DestroyWindow sends WM_DESTROY synchronously, including when Exit is
+    // selected while APP is already borrowed by this window procedure.
+    // Shutdown must not depend on acquiring that RefCell borrow again.
+    if msg == WM_DESTROY {
+        unsafe {
+            let _ = RevokeDragDrop(hwnd);
+        }
+        remove_tray_icon(hwnd);
+        unsafe { PostQuitMessage(0) };
+        return LRESULT(0);
+    }
     let handled = APP.with(|cell| {
         // Win32 re-enters the window procedure from calls like SetWindowRgn and
         // TrackPopupMenu; nested messages fall through to DefWindowProcW.
@@ -1014,8 +1071,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 }
             }
             WM_CHAR => {
-                if let Some(ch) = char::from_u32(wparam.0 as u32) {
-                    app.on_char(ch);
+                if app.keyboard {
+                    if let Some(ch) = app.input_utf16.push(wparam.0 as u16) {
+                        app.on_char(ch);
+                    }
                 }
             }
             WM_KEYDOWN => app.on_key(wparam.0 as u16),
@@ -1036,13 +1095,6 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                     app.set_expanded(app.expand.target < 0.5);
                 }
             }
-            WM_DESTROY => {
-                unsafe {
-                    let _ = RevokeDragDrop(hwnd);
-                }
-                remove_tray_icon(hwnd);
-                unsafe { PostQuitMessage(0) };
-            }
             _ => return None,
         }
         Some(LRESULT(0))
@@ -1050,15 +1102,15 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     handled.unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) })
 }
 
-/// Development aid: `ADA_OFFSET_X` shifts the notch horizontally (e.g. to run next to another instance).
+/// Development aid: `NOTCHLITE_OFFSET_X` shifts the notch horizontally (e.g. to run next to another instance).
 fn dev_offset_x() -> i32 {
-    std::env::var("ADA_OFFSET_X").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
+    std::env::var("NOTCHLITE_OFFSET_X").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
 }
 
 pub fn run() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleW(None)?;
-        let class = w!("AdaNotch");
+        let class = w!("NotchLiteWindow");
         let wc = WNDCLASSEXW {
             cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
             style: CS_DBLCLKS,
@@ -1078,7 +1130,7 @@ pub fn run() -> Result<()> {
         let hwnd = CreateWindowExW(
             WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_ACCEPTFILES,
             class,
-            w!("Ada"),
+            w!("NotchLite"),
             WS_POPUP,
             (screen_w - px_w) / 2 + dev_offset_x(),
             0,
@@ -1108,6 +1160,7 @@ pub fn run() -> Result<()> {
             hidden_for_fullscreen: false,
             hovering: false,
             keyboard: false,
+            input_utf16: Utf16Input::default(),
             pages: Vec::new(),
             page_ids: Vec::new(),
             current: 0,
@@ -1139,15 +1192,14 @@ pub fn run() -> Result<()> {
         let _ = RegisterDragDrop(hwnd, &droptarget::create(Box::new(ShellDrop)));
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         SetTimer(hwnd, TIMER_TICK, 1000, None);
-        SetTimer(hwnd, TIMER_MASCOT, 500, None);
-        // Development aid: `ADA_TEST_PEEK=1` shows a sample peek at startup.
-        if std::env::var_os("ADA_TEST_PEEK").is_some() {
+        // Development aid: `NOTCHLITE_TEST_PEEK=1` shows a sample peek at startup.
+        if std::env::var_os("NOTCHLITE_TEST_PEEK").is_some() {
             worker::peek(Peek {
                 icon: "\u{1F44B}".to_string(),
                 emoji: true,
                 accent: theme::BLUE,
                 title: "Merhaba!".to_string(),
-                body: "This is a sample peek from Ada".to_string(),
+                body: "This is a sample peek from NotchLite".to_string(),
                 seconds: 4.0,
             });
         }
@@ -1158,5 +1210,30 @@ pub fn run() -> Result<()> {
             DispatchMessageW(&msg);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Utf16Input;
+
+    #[test]
+    fn wm_char_decodes_bmp_and_supplementary_text() {
+        let mut input = Utf16Input::default();
+        let decoded: String = "Caffè 😀 𐐀".encode_utf16().filter_map(|unit| input.push(unit)).collect();
+        assert_eq!(decoded, "Caffè 😀 𐐀");
+    }
+
+    #[test]
+    fn invalid_surrogates_do_not_consume_following_text() {
+        let mut input = Utf16Input::default();
+        assert_eq!(input.push(0xDC00), None);
+        assert_eq!(input.push(0xD83D), None);
+        assert_eq!(input.push(u16::from(b'A')), Some('A'));
+        assert_eq!(input.push(0xDE00), None);
+        assert_eq!(input.push(0xD83D), None);
+        input = Utf16Input::default(); // a new editor/focus session
+        assert_eq!(input.push(0xDE00), None);
+        assert_eq!(input.push(u16::from(b'B')), Some('B'));
     }
 }

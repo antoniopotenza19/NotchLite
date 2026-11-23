@@ -1,0 +1,284 @@
+[
+  {
+    "id": "C01",
+    "surface": "OLE drop payload, UTF-16/HGLOBAL ownership and shortcut creation",
+    "principal": "source app + user drag",
+    "resource": "memory and local .url cache",
+    "sourceRefs": [
+      "src/droptarget.rs:35-385 (before)",
+      "src/shell.rs:670-677 (before)"
+    ],
+    "status": "inspected",
+    "checks": [
+      "format branching",
+      "bounded GlobalSize read",
+      "medium release",
+      "create_new collision handling",
+      "filename sanitization",
+      "control and scheme validation"
+    ],
+    "remaining": [
+      "Actual OLE/browser interoperability and malicious handler behavior not exercised."
+    ]
+  },
+  {
+    "id": "C02",
+    "surface": "Shelf persistence, opening and drag-out",
+    "principal": "user-selected local or network path",
+    "resource": "local files/OS shell",
+    "sourceRefs": [
+      "src/pages/shelf.rs:123-170",
+      "src/pages/shelf.rs:218-230",
+      "src/pages/shelf.rs:337-432",
+      "src/pages/shelf.rs:459-510"
+    ],
+    "status": "inspected",
+    "checks": [
+      "no copies/deletion of original files",
+      "explicit click sink",
+      "separate ShellExecute arguments",
+      "COM refcount and interface guards"
+    ],
+    "remaining": [
+      "UNC metadata may block; handed to quality review. Windows ACL/reparse-point behavior not runtime tested."
+    ]
+  },
+  {
+    "id": "C03",
+    "surface": "Plain text settings/list storage",
+    "principal": "same OS user/profile",
+    "resource": "NotchLite APPDATA/LOCALAPPDATA",
+    "sourceRefs": [
+      "src/store.rs:10-62"
+    ],
+    "status": "inspected",
+    "checks": [
+      "isolated app directory",
+      "no data migration from another app",
+      "temporary-file write/rename",
+      "source callsites use fixed names"
+    ],
+    "remaining": [
+      "Filesystem ACL, reparse-point and crash durability behavior not exercised. No lower-privilege write path shown."
+    ]
+  },
+  {
+    "id": "C04",
+    "surface": "WinRT HTTP request/response helper",
+    "principal": "fixed third-party HTTPS provider",
+    "resource": "network and process memory",
+    "sourceRefs": [
+      "src/http.rs:9-53"
+    ],
+    "status": "inspected",
+    "checks": [
+      "fixed callsite hosts",
+      "query percent encoding",
+      "body buffering and explicit limits review"
+    ],
+    "remaining": [
+      "S3 response/timeout/redirect behavior requires sandbox verification; no live requests sent by audit."
+    ]
+  },
+  {
+    "id": "C05",
+    "surface": "Media session, art and lyrics workers",
+    "principal": "Windows media session and LRCLIB",
+    "resource": "metadata, art/lyrics cache, background threads",
+    "sourceRefs": [
+      "src/pages/media.rs:145-560",
+      "src/pages/media.rs:629-670",
+      "src/pages/media.rs:826-829"
+    ],
+    "status": "partial",
+    "checks": [
+      "subscription cleanup",
+      "closed flag",
+      "8 MiB compressed thumbnail cap",
+      "cache entry count",
+      "encoded LRCLIB params",
+      "thread-per-lyrics lifecycle"
+    ],
+    "remaining": [
+      "Remaining rendering/input paths and all timing/race behavior not fully inspected. In-flight lyrics operations remain unbounded/cannot be stopped explicitly."
+    ]
+  },
+  {
+    "id": "C06",
+    "surface": "Weather location, forecast and lifecycle",
+    "principal": "user opt-in/out plus ipwho.is/MET Norway",
+    "resource": "IP-derived location and outbound refreshes",
+    "sourceRefs": [
+      "src/pages/weather.rs:103-119 (before)",
+      "src/pages/weather.rs:334-417 (before)",
+      "src/pages/weather.rs:97-146 (after)"
+    ],
+    "status": "inspected",
+    "checks": [
+      "coordinate numeric bounds",
+      "fixed HTTPS endpoints",
+      "drop cancellation",
+      "interruptible wait",
+      "stop before next fetch"
+    ],
+    "remaining": [
+      "In-flight fetch cancellation not implemented; actual network behavior not tested by audit."
+    ]
+  },
+  {
+    "id": "C07",
+    "surface": "Notification access/listener/forwarding",
+    "principal": "OS notification permissions and notification producers",
+    "resource": "notification text in process memory",
+    "sourceRefs": [
+      "src/pages/notifications.rs:23-28",
+      "src/pages/notifications.rs:93-266",
+      "src/pages/notifications.rs:275-422"
+    ],
+    "status": "inspected",
+    "checks": [
+      "Allowed access gate",
+      "event guard unregister",
+      "20 item list cap",
+      "no notification persistence/network in module",
+      "receiver liveness checks"
+    ],
+    "remaining": [
+      "Windows permission UI, lock-screen confidentiality, event queue pressure and OS notification limits need runtime validation."
+    ]
+  },
+  {
+    "id": "C08",
+    "surface": "Football provider parsing, URL and cache paths",
+    "principal": "ESPN JSON/CDN + numeric setting",
+    "resource": "network, disk and image/cache memory",
+    "sourceRefs": [
+      "src/pages/football.rs:145-249",
+      "src/pages/football.rs:493-513",
+      "src/pages/football.rs:564-773",
+      "src/pages/football.rs:935-967",
+      "src/pages/football.rs:1080-1083"
+    ],
+    "status": "partial",
+    "checks": [
+      "numeric IDs",
+      "fixed HTTPS hosts",
+      "query encoding",
+      "closed flag",
+      "cache naming",
+      "PNG prefix check"
+    ],
+    "remaining": [
+      "Full display/parser paths not exhaustively inspected; resource upper bounds and image decoder behavior are S3."
+    ]
+  },
+  {
+    "id": "C09",
+    "surface": "Claude usage file override and parser",
+    "principal": "same user/configured local producer",
+    "resource": "local JSON and UI thread",
+    "sourceRefs": [
+      "src/pages/claude.rs:15-103",
+      "src/pages/claude.rs:277-366"
+    ],
+    "status": "inspected",
+    "checks": [
+      "explicit configured path",
+      "no network sink",
+      "numeric clamping",
+      "timestamp range/saturating operations"
+    ],
+    "remaining": [
+      "No file-size bound; a slow or oversized configured file may block UI. This is hardening, no privilege boundary bypass demonstrated."
+    ]
+  },
+  {
+    "id": "C10",
+    "surface": "Worker wake/command bridge",
+    "principal": "in-process workers",
+    "resource": "window queue and command VecDeque",
+    "sourceRefs": [
+      "src/worker.rs:17-100"
+    ],
+    "status": "inspected",
+    "checks": [
+      "no raw pointer payload in messages",
+      "mutex command ownership",
+      "thread initialization",
+      "queue boundedness review"
+    ],
+    "remaining": [
+      "Queue has no capacity cap; adversarial producer-rate impact not proven."
+    ]
+  },
+  {
+    "id": "C11",
+    "surface": "Wndproc Exit→DestroyWindow cleanup",
+    "principal": "user Exit action",
+    "resource": "process lifetime",
+    "sourceRefs": [
+      "src/shell.rs:835-836 (before)",
+      "src/shell.rs:1006-1063 (before)",
+      "src/shell.rs:1167-1171 (before)"
+    ],
+    "status": "inspected",
+    "checks": [
+      "independent static verification of quality Q1",
+      "looked for other PostQuitMessage calls",
+      "checked primary Win32 documentation"
+    ],
+    "remaining": [
+      "GUI reproduction/teardown validation not performed here; quality agent owns correction."
+    ]
+  },
+  {
+    "id": "C12",
+    "surface": "Runtime image decoding",
+    "principal": "media source or provider image",
+    "resource": "WIC/Direct2D bitmap memory",
+    "sourceRefs": [
+      "src/gfx.rs:543-573",
+      "src/gfx.rs:686-700"
+    ],
+    "status": "partial",
+    "checks": [
+      "decoder path",
+      "cache use",
+      "pixel dimension guard search"
+    ],
+    "remaining": [
+      "Native codec implementation, GPU driver and actual allocation limits not audited; S3."
+    ]
+  },
+  {
+    "id": "C13",
+    "surface": "Dependency implementation/advisory coverage",
+    "principal": "third-party crate suppliers",
+    "resource": "compiled dependencies",
+    "sourceRefs": [
+      "Cargo.toml",
+      "Cargo.lock"
+    ],
+    "status": "not-inspected",
+    "checks": [
+      "scope recorded"
+    ],
+    "remaining": [
+      "No dependency scanner installed or run by this reviewer. Dependency source and current advisory coverage must be reviewed separately."
+    ]
+  },
+  {
+    "id": "C14",
+    "surface": "Exploit and hostile-input runtime reproduction",
+    "principal": "synthetic attacker",
+    "resource": "OS/network/credentials",
+    "sourceRefs": [],
+    "status": "blocked",
+    "checks": [
+      "sandbox availability reviewed"
+    ],
+    "remaining": [
+      "No available OS-enforced sandbox with no external network/read-only target/toolchain/isolated writes; all security reproductions kept static."
+    ]
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "label": "base-idle",
+  "process_name": "notchlite",
+  "os": "Microsoft Windows NT 10.0.26300.0",
+  "logical_processors": 8,
+  "samples": 60,
+  "elapsed_seconds": 60.596,
+  "cpu_percent_total": 0.0,
+  "cpu_percent_one_core": 0.0,
+  "private_mib_mean": 36.93800000000005,
+  "private_mib_sampled_max": 36.938,
+  "working_set_mib_mean": 48.77700000000003,
+  "working_set_mib_sampled_max": 48.777,
+  "threads_sampled_max": 14.0,
+  "handles_sampled_max": 1050.0,
+  "excludes": [
+    "GPU memory",
+    "other processes",
+    "visual latency"
+  ],
+  "build": "initial pre-review build; not a measurement of the revised binary",
+  "measured_date": "2026-11-23"
+}
