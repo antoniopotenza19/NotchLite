@@ -32,17 +32,21 @@ struct FileOffer {
     private var task: Task<Void, Never>?
     private var foreground = true
     private var generation = 0
+    private var pendingAction: (@MainActor () async throws -> Void)?
     func scene(active: Bool) {
         foreground = active
-        if active { poll() } else { generation += 1; task?.cancel(); client?.cancel(); task = nil; busy = false }
+        if active {
+            if let pending = pendingAction { pendingAction = nil; work(pending) } else { poll() }
+        } else { generation += 1; task?.cancel(); client?.cancel(); task = nil; busy = false }
     }
     func disconnect() {
-        generation += 1; task?.cancel(); client?.cancel(); task = nil; client = nil; token = nil; pairID = nil; pollToken = nil
+        generation += 1; task?.cancel(); client?.cancel(); task = nil; pendingAction = nil; client = nil; token = nil; pairID = nil; pollToken = nil
         paired = false; busy = false; outgoing = nil; transferID = nil; acknowledgementID = nil; acknowledgementPending = false
-        if let exportFile { try? FileManager.default.removeItem(at: exportFile) }; exportFile = nil
+        if let exportFile { try? FileManager.default.removeItem(at: exportFile.deletingLastPathComponent()) }; exportFile = nil
         qrText = ""; message = "Disconnesso. Genera un nuovo QR sul PC per riprovare."
     }
     private func work(_ action: @escaping @MainActor () async throws -> Void) {
+        guard foreground else { pendingAction = action; return }
         generation += 1; let run = generation; task?.cancel(); client?.cancel(); busy = true
         task = Task {
             defer { if generation == run { busy = false; task = nil; poll() } }

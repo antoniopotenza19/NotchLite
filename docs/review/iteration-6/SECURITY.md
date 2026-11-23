@@ -45,7 +45,7 @@ Ora il finale di `run` (`phone.rs:321`) chiude listener/socket, marca stopped e 
 
 **Stato: confirmed, corretto.** Il job di upload/download invocava `poll()` prima di terminare; `poll` vedeva lo stesso job ancora attivo e non ripartiva. Dopo il primo invio le nuove offerte PC potevano quindi non comparire. Controevidenza: non c'era un altro timer di polling che riavviasse il percorso, salvo un successivo evento lifecycle.
 
-`MainActivity.kt:90` ora libera job e stato busy nel finally della generazione corrente, poi riavvia il polling. Anche la fine del vecchio poll è condizionata alla generazione (`:118`). Controllo statico; nessuna interazione Android eseguita.
+`MainActivity.kt:95` ora libera job e stato busy nel finally della generazione corrente, poi riavvia il polling. Anche la fine del vecchio poll è condizionata alla generazione (`:124`). Controllo statico; nessuna interazione Android eseguita.
 
 ### R3 — conferma del salvataggio incompatibile tra client e server
 
@@ -63,7 +63,13 @@ I comandi UI (`phone.rs:181`, `:198`, `:204`, `:222`, `:230`) usano ora try_lock
 
 **Stato: confirmed source-supported, corretto; interleaving non riprodotto su dispositivo.** Il solo cancel del task non impediva a un risultato già completato di riprendere l'azione iOS, modificando token/stato dopo Disconnect. Inoltre un vecchio poll poteva azzerare il riferimento a un task nuovo. La cancellazione Swift è cooperativa: un controllo nel solo defer non protegge le mutazioni dopo await. [Documentazione Swift](https://docs.swift.org/latest/documentation/swift/task/cancel%28%29/).
 
-La guardia ora è all'ingresso e dopo gli await, con generazione verificata prima di esporre risultati (`CompanionModel.swift:45`, `:64`, `:71`, `:101`, `:145`; `PinnedClient.swift:106`). Il cleanup del trasporto usa identità `active === handle`. Progress di vecchi task non aggiorna la nuova UI. Android cattura client, ID e bearer sul thread UI prima dell'I/O (`MainActivity.kt:167`, `:178`), evitando letture intercalabili dei tre campi globali durante un cambio sessione. Sono stati verificati i chiamanti reali e il binding del client al suo QR; nessuna fuga di token è stata osservata o riprodotta.
+La guardia ora è all'ingresso e dopo gli await, con generazione verificata prima di esporre risultati (`CompanionModel.swift:48`, `:68`, `:75`, `:105`, `:149`; `PinnedClient.swift:106`). Il cleanup del trasporto usa identità `active === handle`. Progress di vecchi task non aggiorna la nuova UI. Android cattura client, ID e bearer sul thread UI prima dell'I/O (`MainActivity.kt:173`, `:184`), evitando letture intercalabili dei tre campi globali durante un cambio sessione. Sono stati verificati i chiamanti reali e il binding del client al suo QR; nessuna fuga di token è stata osservata o riprodotta.
+
+### Ricontrollo finale dei callback dei selettori file
+
+Riletto il diff mirato rispetto a `49f064`: Android `onStart/work/disconnect` (`MainActivity.kt:78`, `:95`, `:207`) e iOS `scene/work/disconnect` (`CompanionModel.swift:36`, `:48`, `:42`) conservano al massimo una nuova azione manuale ricevuta mentre l'app è inattiva. L'azione non avvia rete in quello stato; al ritorno in primo piano viene estratta e azzerata prima di passare attraverso le normali guardie di work. Disconnect elimina la coda. Le task cancellate non vengono inserite automaticamente nella coda e non viene ripreso un trasferimento interrotto.
+
+Il cleanup iOS del file da esportare rimuove anche la sua directory temporanea: il relativo URL proviene dalla directory UUID creata dal modello, non dal picker o da un path ricevuto dal PC. `PinnedClient.swift:119` usa ora withLock per brevi accessi sincroni, senza await sotto lock, conservando il confronto di identità nel defer. L'annotazione esplicita `(Data, URL?)` non cambia il controllo di autorizzazione. Nessun nuovo difetto concreto emerso in questo diff; ordine reale dei callback e compatibilità di compilazione restano da verificare in CI/dispositivo. Gli hash dei tre file sono aggiornati sotto; backend Rust invariato.
 
 ### R6 — approvazione dopo i due minuti iniziali
 
@@ -112,10 +118,10 @@ SHA-256 dei byte locali alla chiusura di questa revisione. File successivamente 
 | `src/phone_qr.rs` | `71e3fe501986de684254e8572e5246d26135abe7360ff6cc7a07203a5961ca94` |
 | Android `PairQr.kt` | `c88d023caf841502dc62f8d710bb61b5cd7b9e897a07d58f90bada6c29e8e3af` |
 | Android `ApiClient.kt` | `dab651c999c2c1f6035cebdf9be5166231ed70b7cf6887519444a454bef694e9` |
-| Android `MainActivity.kt` | `f9b59c1da76d064bcf839beee1d030ef698ecc9e25346515e6a21263746ca510` |
+| Android `MainActivity.kt` | `8e74dcbbc066b3fd6afb27d302859689599bfae5eb86bc2cf667db8663f44ded` |
 | iOS `PairQR.swift` | `a9da779f2f8ae882835b4ed292c1345c8314334274584cc55f20fae8e1cd129a` |
-| iOS `PinnedClient.swift` | `2da94f3938defd4f61003f15945f2171c33cba521cd0339c63f6524181937e69` |
-| iOS `CompanionModel.swift` | `8b4b795793349bff8a57577f9a1c8057e77d614b22b670a17053977466c9121e` |
+| iOS `PinnedClient.swift` | `f54957c8e06c996c0dc51562b2934d2d95d0a82efde15e27d65e480ed6964edf` |
+| iOS `CompanionModel.swift` | `148c83cfa14b1916f1c43f867e4f1ed3f6a7e1105635184d0ac145389335ef3e` |
 | `Cargo.toml` | `b017f0d3d589e64737b7c55676de5a704f24d1dc16ee6b8344241a23604e04fb` |
 | `Cargo.lock` | `ef7f42901ba5952e12eb532f241f3ae9fc2dce09de71c249b142d24319563b46` |
 

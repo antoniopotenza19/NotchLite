@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
     private var foreground = false
     private var busy = false
     private var generation = 0
+    private var pendingAction: (suspend () -> Unit)? = null
     private var awaitingExport: JSONObject? = null
     private val scan = registerForActivityResult(ScanContract()) { result -> result.contents?.let { qrField.setText(it) } }
     private val pick = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) send(uri) }
@@ -74,7 +75,11 @@ class MainActivity : ComponentActivity() {
             }
         }); refresh()
     }
-    override fun onStart() { super.onStart(); foreground = true; poll() }
+    override fun onStart() {
+        super.onStart(); foreground = true
+        val pending = pendingAction; pendingAction = null
+        if (pending != null) work(pending) else poll()
+    }
     override fun onStop() {
         foreground = false; generation++; job?.cancel(); api?.abort(); job = null; busy = false; refresh()
         super.onStop()
@@ -88,6 +93,7 @@ class MainActivity : ComponentActivity() {
         ackButton.visibility = if (ackId != null) View.VISIBLE else View.GONE; ackButton.isEnabled = !busy
     }
     private fun work(action: suspend () -> Unit) {
+        if (!foreground) { pendingAction = action; return }
         val run = ++generation
         job?.cancel(); api?.abort(); busy = true; refresh()
         job = lifecycleScope.launch {
@@ -198,5 +204,5 @@ class MainActivity : ComponentActivity() {
         val id = transferId ?: outgoing?.optString("id") ?: return
         work { request("DELETE", "/v1/transfers/${checkNotNull(api).id(id)}"); transferId = null; outgoing = null; message.text = "Trasferimento annullato" }
     }
-    private fun disconnect() { generation++; job?.cancel(); api?.abort(); job = null; api = null; token = null; pairId = null; pollToken = null; outgoing = null; transferId = null; ackId = null; busy = false; if (::pairButton.isInitialized) refresh() }
+    private fun disconnect() { generation++; job?.cancel(); api?.abort(); job = null; pendingAction = null; api = null; token = null; pairId = null; pollToken = null; outgoing = null; transferId = null; ackId = null; busy = false; if (::pairButton.isInitialized) refresh() }
 }

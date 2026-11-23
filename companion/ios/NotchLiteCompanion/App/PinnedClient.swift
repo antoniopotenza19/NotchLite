@@ -116,9 +116,9 @@ final class PinnedClient: @unchecked Sendable {
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         if let size { request.setValue(String(size), forHTTPHeaderField: "Content-Length"); request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type") }
         let handle = CancellationHandle()
-        lock.lock(); active = handle; lock.unlock()
-        defer { lock.lock(); if active === handle { active = nil }; lock.unlock() }
-        let result = try await withTaskCancellationHandler(operation: {
+        lock.withLock { active = handle }
+        defer { lock.withLock { if active === handle { active = nil } } }
+        let result: (Data, URL?) = try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
                 let transport = Transport(qr: qr, expected: download, progress: progress) { continuation.resume(with: $0) }
                 transport.start(request, upload: upload); handle.install(transport)
