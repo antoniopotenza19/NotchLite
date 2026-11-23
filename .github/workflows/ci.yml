@@ -15,17 +15,13 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     env:
-      RUSTUP_TOOLCHAIN: 1.100.0-x86_64-pc-windows-gnu
+      RUSTUP_TOOLCHAIN: 1.100.0-x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - name: Prepare Rust
-        shell: pwsh
-        run: |
-          rustup toolchain install 1.100.0-x86_64-pc-windows-gnu --profile minimal --no-self-update
-          $gnuTools = Join-Path (rustc --print sysroot) 'lib/rustlib/x86_64-pc-windows-gnu/bin/self-contained'
-          $gnuTools | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        run: rustup toolchain install 1.100.0-x86_64-pc-windows-msvc --profile minimal --no-self-update
       - name: Unit tests
         run: cargo test --locked
       - name: Release build
