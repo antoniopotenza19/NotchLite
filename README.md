@@ -6,7 +6,7 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.6 supera 59 test Rust, inclusi scambi TLS su loopback: vedi [validazione](docs/review/iteration-6/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.6 supera 59 test Rust, inclusi scambi TLS su loopback: vedi [validazione](docs/review/iteration-6/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. Anche APK Android e build iOS Simulator unsigned compilano: tre test parser per piattaforma, [esiti CI](docs/review/iteration-6/CI.json). [Esito della prima revisione](docs/review/SUMMARY.md).
 
 Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.6 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, navigazione, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
 

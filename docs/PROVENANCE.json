@@ -26,7 +26,7 @@
     "rust_tests_executed": true,
     "app_run": false,
     "performance_measured": false,
-    "package_integrity_checked": false,
+    "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
     "rust_tests_passed": 59,
     "visual_interaction_tested": false,
@@ -40,7 +40,8 @@
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
     "phone_pairing_implemented": true,
-    "phone_pairing_real_device_tested": false
+    "phone_pairing_real_device_tested": false,
+    "cross_platform_ci": "docs/review/iteration-6/CI.json"
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",

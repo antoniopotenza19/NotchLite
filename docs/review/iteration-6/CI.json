@@ -1,0 +1,76 @@
+{
+  "version": "0.1.6",
+  "date": "2026-11-23",
+  "code_and_workflow_ref": "0a9f122ba084b4a77904611e74891a87686cc7b2",
+  "code_matches_ref_at_recording": true,
+  "runs": {
+    "windows": {
+      "run_id": 45243950629,
+      "url": "https://github.com/antoniopotenza19/NotchLite/actions/runs/45243950629",
+      "source_ref": "0a9f122ba084b4a77904611e74891a87686cc7b2",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "test-and-build",
+          "job_id": 137935677882,
+          "conclusion": "success"
+        }
+      ]
+    },
+    "companion": {
+      "run_id": 45243950649,
+      "url": "https://github.com/antoniopotenza19/NotchLite/actions/runs/45243950649",
+      "source_ref": "0a9f122ba084b4a77904611e74891a87686cc7b2",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "android",
+          "job_id": 137935677889,
+          "conclusion": "success"
+        },
+        {
+          "name": "ios",
+          "job_id": 137935678554,
+          "conclusion": "success"
+        }
+      ]
+    }
+  },
+  "unit_tests": {
+    "windows_rust": 59,
+    "android_qr_parser": 3,
+    "swift_qr_parser": 3
+  },
+  "builds": {
+    "windows_msvc": true,
+    "windows_gnu_local": true,
+    "android_debug_apk": true,
+    "ios_simulator_unsigned": true
+  },
+  "ios_compiler": {
+    "runner": "macos-15-intel",
+    "xcode": "16.4",
+    "swift": "6.1.2"
+  },
+  "mobile_artifacts": {
+    "NotchLite-Companion-Android-debug.apk": {
+      "sha256": "c34d466cf1c4ebe44ca08725395529a396ec890a8399fc2f1ebafd403a5504fa",
+      "bytes": 2599837
+    },
+    "NotchLiteCompanion-simulator.tar.gz": {
+      "sha256": "19680abdca6ca2b884d2a39356bd75618ab06a8856a93c5596214d4a90f623b4",
+      "bytes": 415517
+    }
+  },
+  "apk_packaging": {
+    "zip_crc_ok": true,
+    "bundled_notice_bytes": 15130
+  },
+  "validation_scope": "Compilation and synthetic tests only. No Windows GUI, desktop automation, simulator app launch, real phone installation/pairing or RAM/CPU measurements.",
+  "iphone_installable_ipa_created": false,
+  "apple_signing_or_account_used": false,
+  "local_log_sha256": {
+    "windows-final.log": "44d8a58ef9ebd6f6875d6eb2c54bb07fd526e1f8cf79d06b060eda37bb4a956f",
+    "ios-final.log": "99bed79d846e21d6d4746ee46ce119076587302a6a5267fe3d5550d5810166de"
+  }
+}

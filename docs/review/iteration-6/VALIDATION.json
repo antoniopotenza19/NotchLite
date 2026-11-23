@@ -95,5 +95,8 @@
     "RAM/CPU/GPU/latency and long-running leak checks"
   ],
   "historical_performance_version": "0.1.2",
-  "historical_performance_report": "docs/PERFORMANCE-0.1.2.md"
+  "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
+  "cross_platform_ci": "docs/review/iteration-6/CI.json",
+  "browser_automation_used": false,
+  "web_documentation_research_used": true
 }
