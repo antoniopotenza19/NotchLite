@@ -1,6 +1,8 @@
 # Consumi e prove
 
-I valori nella tabella seguente sono budget iniziali, non risultati misurati. Il campione sintetizzato della prima build, separato dagli obiettivi, si trova in benchmarks/base-idle.json ed è descritto in BUILD-VALIDATION.md. Non è una misura della build successiva alle correzioni.
+Le misure della build corrente sono in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio è 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non è ancora raggiunto in tutti gli scenari.
+
+I valori nella tabella seguente sono budget iniziali, non risultati misurati. Il campione della prima build in benchmarks/base-idle.json e BUILD-VALIDATION.md resta storico.
 
 | Metrica | Obiettivo del profilo base |
 |---|---|
@@ -27,4 +29,4 @@ Per la latenza usare tracce ETW o una ripresa con timestamp: un controllo del fi
 
 ## Verifiche non ancora eseguite
 
-Accessibilità, DPI/multi-monitor, interazioni visive, rete dei moduli opzionali, fullscreen, uso prolungato, memoria GPU e latenza. Compilazione release e 10 test Rust sono passati. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.
+Accessibilità, DPI/multi-monitor, rete dei moduli opzionali, fullscreen reale, uso prolungato, memoria GPU e latenza. Compilazione release e 18 test Rust sono passati. Apertura e navigazione sono state osservate; incolla e uscita dal menu della build finale restano da provare. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.

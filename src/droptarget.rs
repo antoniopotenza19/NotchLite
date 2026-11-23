@@ -1,4 +1,4 @@
-//! Modified for NotchLite: validate web links at input and shortcut boundaries.
+//! Modified for NotchLite: validate web links and read bounded text on explicit paste.
 //! OLE drop target for the notch window.
 //!
 //! `WM_DROPFILES` only reports the final drop; an `IDropTarget` registered
@@ -27,7 +27,7 @@ use windows::core::{implement, Interface, Result};
 use windows::Win32::Foundation::POINTL;
 use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::Ole::{
-    IDropTarget, IDropTarget_Impl, CF_HDROP, CF_UNICODETEXT, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_LINK,
+    IDropTarget, IDropTarget_Impl, OleGetClipboard, CF_HDROP, CF_UNICODETEXT, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_LINK,
     DROPEFFECT_NONE,
 };
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
@@ -294,8 +294,28 @@ unsafe fn read_files(data: &IDataObject) -> Option<Vec<PathBuf>> {
     Some(files)
 }
 
+/// Reads clipboard text only when the caller handles an explicit paste command.
+/// No history, listener or clipboard mutation is installed. Field input is much
+/// shorter; this bound also caps the temporary text copied into this process.
+pub fn clipboard_text() -> Option<String> {
+    let data = unsafe { OleGetClipboard() }.ok()?;
+    unsafe { read_text_limited(&data, CF_UNICODETEXT.0, 512) }
+}
+
 /// Reads a NUL-terminated UTF-16 string from an HGLOBAL medium.
 unsafe fn read_text(data: &IDataObject, cf: u16) -> Option<String> {
+    read_text_limited(data, cf, usize::MAX)
+}
+
+struct GlobalUnlockGuard(*mut c_void);
+
+impl Drop for GlobalUnlockGuard {
+    fn drop(&mut self) {
+        unsafe { GlobalUnlock(self.0) };
+    }
+}
+
+unsafe fn read_text_limited(data: &IDataObject, cf: u16, max_units: usize) -> Option<String> {
     let medium = get_data(data, cf)?;
     let handle = medium.global()?;
     let size = GlobalSize(handle);
@@ -303,13 +323,14 @@ unsafe fn read_text(data: &IDataObject, cf: u16) -> Option<String> {
     if ptr.is_null() {
         return None;
     }
-    let max = size / 2;
+    // This guard is dropped before the medium, including during unwinding.
+    let _unlock = GlobalUnlockGuard(handle);
+    let max = (size / 2).min(max_units);
     let mut len = 0;
     while len < max && *ptr.add(len) != 0 {
         len += 1;
     }
     let text = String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len));
-    GlobalUnlock(handle);
     Some(text)
 }
 

@@ -7,6 +7,9 @@ mascot timer lifecycle, animation interval, measurement tooling and project docs
 Original attribution and third-party notices are retained below.
 Further NotchLite changes: reentrant window shutdown, isolated startup setting,
 UTF-16 input, editor focus lifecycle, web-link validation and weather cancellation.
+Version 0.1.2 also changes first-run publication, hidden-window rendering,
+explicit panel opening and bounded clipboard paste. Development-only Ponytail
+guidance is under .agents/skills with its separate MIT notices.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources

@@ -1,0 +1,20 @@
+{
+  "graphify": {
+    "original_repository": "https://github.com/safishamsi/graphify",
+    "license": "MIT",
+    "kind": "Optional existing development tool; not vendored or installed by this integration",
+    "observed_distribution": "graphifyy",
+    "observed_version": "0.8.26",
+    "git_revision": null,
+    "evidence": "Installed Python distribution metadata and local API signatures",
+    "mode": "AST-only via tools/Update-CodeGraph.ps1"
+  },
+  "ponytail": {
+    "original_repository": "https://github.com/DietrichGebert/ponytail",
+    "revision": "ebd8654c2c627f721eb8f9c0d1bd4090a29f9e10",
+    "license": "MIT",
+    "development_source": ".agents/skills/notchlite-development/references/SOURCES.json",
+    "review_source": ".agents/skills/ponytail-review/references/SOURCES.json"
+  },
+  "product_runtime_dependencies_added": []
+}

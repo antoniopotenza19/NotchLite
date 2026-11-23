@@ -1,0 +1,43 @@
+{
+  "label": "v012-background",
+  "process_name": "notchlite",
+  "os": "Microsoft Windows NT 10.0.26300.0",
+  "logical_processors": 8,
+  "samples": 60,
+  "elapsed_seconds": 60.639,
+  "cpu_percent_total": 0.0,
+  "cpu_percent_one_core": 0.0,
+  "private_mib_mean": 45.35779999999998,
+  "private_mib_sampled_max": 45.418,
+  "working_set_mib_mean": 43.63796666666668,
+  "working_set_mib_sampled_max": 43.664,
+  "threads_sampled_max": 17.0,
+  "handles_sampled_max": 1061.0,
+  "excludes": [
+    "GPU memory",
+    "other processes",
+    "visual latency"
+  ],
+  "version": "0.1.2",
+  "date": "2026-11-23",
+  "scenario": "idle requested background capsule; visibility can follow fullscreen policy",
+  "modules": [
+    "shelf",
+    "todo",
+    "focus",
+    "settings"
+  ],
+  "disabled": [
+    "media",
+    "calendar",
+    "weather",
+    "football",
+    "system",
+    "claude",
+    "notifications"
+  ],
+  "mascot": false,
+  "warmup_seconds": 15,
+  "binary_sha256": "e06eb2b9ccfcd3f2415513edbf23a0325051d3cf49a69d8ba993f5441da4e27e",
+  "profile_verified_after_sample": true
+}

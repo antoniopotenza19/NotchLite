@@ -24,18 +24,18 @@
   "validation": {
     "compiled": true,
     "rust_tests_executed": true,
-    "app_run": false,
-    "performance_measured": false,
+    "app_run": true,
+    "performance_measured": true,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 15,
-    "visual_interaction_tested": false,
-    "visual_test_limitation": "overlay not returned as a targetable window by native UI inspection",
-    "performance_report": "docs/benchmarks/base-idle.json",
+    "rust_tests_passed": 18,
+    "visual_interaction_tested": true,
+    "visual_test_limitation": "Opening/navigation were observed; final paste, full exit/restart and other GUI flows remain unverified after user stopped control.",
+    "performance_report": "docs/PERFORMANCE-0.1.2.md",
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": true,
     "previous_build_performance_measured": true,
-    "review_validation": "docs/review/VALIDATION.json"
+    "review_validation": "docs/review/iteration-2/VALIDATION.json"
   },
   "modified_upstream_files": [
     "Cargo.toml",
@@ -51,15 +51,16 @@
     "src/pages/weather.rs"
   ],
   "binary": {
-    "sha256": "0d63447c9e1ca0e5a5ba17a4d042a7b60645f8ab98980ce28ce4ddc83e76757c",
-    "bytes": 760832
+    "sha256": "e06eb2b9ccfcd3f2415513edbf23a0325051d3cf49a69d8ba993f5441da4e27e",
+    "bytes": 770560
   },
   "new_source_files": [
     "src/profile.rs"
   ],
   "review_methods": [
-    "three-agent static review with independent verification",
-    "Graphify 0.8.26 already installed; local AST mapping",
-    "Ponytail review checklist read-only; no plugin installed"
-  ]
+    "project-local Graphify AST workflow",
+    "project-local Ponytail implementation and review guidance with MIT provenance",
+    "three-agent review with independent verification"
+  ],
+  "version": "0.1.2"
 }

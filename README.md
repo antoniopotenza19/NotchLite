@@ -6,9 +6,11 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale, compilata in release con Rust 1.100.0 per Windows x64 GNU. Dopo la revisione, la suite normale passa 15 test su 15. Il pacchetto portatile separato contiene notchlite.exe, istruzioni e licenze. [Esito della revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale, compilata in release con Rust 1.100.0 per Windows x64 GNU. La versione 0.1.2 supera 18 test unitari. Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
 
-La finestra overlay non è selezionabile dal controllo automatico dell'interfaccia usato nella sessione: hover, navigazione, trascinamento e resa visiva restano da verificare manualmente. Vedi docs/BUILD-VALIDATION.md per le verifiche svolte e i loro limiti.
+Il doppio clic apre ora il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate sullo schermo; incolla, uscita dal menu, DPI e l'intero flusso restano da collaudare. [RAM della build corrente](docs/PERFORMANCE-0.1.2.md): 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo. La memoria GPU è esclusa.
+
+**Obiettivo visivo:** personalizzare anche il desktop nel suo insieme. Barra/dock, sfondo coordinato, orologio e widget desktop non sono ancora implementati. La loro realizzazione è ora prioritaria: [esperienza desktop completa](docs/DESKTOP-EXPERIENCE.md).
 
 Le funzioni ereditate sono codice presente nella base, non funzionalità certificate sul tuo PC. Vedi [ROADMAP.md](docs/ROADMAP.md) per le parti mancanti.
 
@@ -22,6 +24,12 @@ Le funzioni ereditate sono codice presente nella base, non funzionalità certifi
 - Intervallo richiesto delle transizioni portato da 1 a 16 ms; non è una misura della frequenza effettiva.
 - Restano il controllo generale ogni secondo e, quando si abilita la musica, i worker e le animazioni media ereditati. Il programma non promette CPU zero.
 - Logo e risorse grafiche provengono ancora da Ada e dai componenti indicati in NOTICE; la nuova identità grafica è da realizzare.
+
+Nella 0.1.2: scrittura iniziale del profilo senza file finali parziali o sovrascritture, sospensione del rendering quando la capsula è nascosta dal fullscreen, apertura esplicita e incolla testuale limitato nei campi.
+
+## Team di sviluppo
+
+[AGENTS.md](AGENTS.md) collega il [team](team/DEVELOPMENT.md), le skill locali Ponytail e lo script [Update-CodeGraph.ps1](tools/Update-CodeGraph.ps1). Graphify genera una mappa AST locale dei sorgenti; Ponytail guida implementazione e review. Sono strumenti di sviluppo, senza nuove dipendenze nel processo dell'app.
 
 ## Compilazione
 
@@ -40,7 +48,7 @@ Dati del fork:
 - `%APPDATA%\NotchLite`: liste e calendario.
 - `%LOCALAPPDATA%\NotchLite`: cache e deposito file.
 
-Passare il mouse sulla notch per aprirla; allontanarlo per richiuderla. Settings è l'ultima pagina. Uscita dal menu dell'icona nell'area di notifica.
+Il doppio clic apre il pannello e lo mantiene visibile; Escape torna alla capsula (durante una modifica, prima chiude l'editor). In modalità capsula, passare il mouse per aprirla e allontanarlo per richiuderla. Settings è l'ultima pagina. Clic destro sulla notch o sull'icona nell'area di notifica per aprire il menu con Exit.
 
 Abilitando musica, meteo o calcio si abilitano anche le richieste di rete del codice ereditato: rispettivamente testi delle canzoni, previsioni/geolocalizzazione e risultati sportivi. Il profilo iniziale li lascia spenti. L'opzione avvio con Windows resta una scelta manuale.
 

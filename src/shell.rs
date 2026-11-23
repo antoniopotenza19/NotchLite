@@ -1,5 +1,6 @@
 // Modified for NotchLite: isolated identity, opt-in mascot timer, 16 ms transitions,
-// reentrant shutdown, Unicode input and page-edit lifecycle corrections.
+// reentrant shutdown, Unicode input, page-edit lifecycle, fullscreen rendering suspension
+// and explicit opening of the real panel from the executable or tray menu.
 //! The notch window: geometry and animation, header, page navigation, input
 //! routing, file drops and the tray icon.
 
@@ -31,6 +32,7 @@ use crate::theme;
 use crate::worker::{self, Peek, ShellCmd, Waker, WM_APP_CMD, WM_APP_WAKE};
 
 const WM_APP_TRAY: u32 = WM_APP + 2;
+const WM_APP_OPEN: u32 = WM_APP + 4;
 const WM_MOUSELEAVE: u32 = 0x02A3;
 const TIMER_ANIM: usize = 1;
 const TIMER_TICK: usize = 2;
@@ -41,6 +43,7 @@ const MENU_STARTUP: usize = 1;
 const MENU_EXIT: usize = 2;
 const MENU_MASCOT: usize = 3;
 const MENU_MINIMAL: usize = 4;
+const MENU_OPEN: usize = 5;
 const SETTINGS_FILE: &str = "settings.txt";
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 const RUN_VALUE: PCWSTR = w!("NotchLite");
@@ -111,6 +114,8 @@ struct App {
     last_region: (i32, i32, i32),
     /// True while hidden because a fullscreen app (game, video, slideshow) is in front.
     hidden_for_fullscreen: bool,
+    /// An explicit user request keeps the real panel open until Escape/collapse.
+    explicit_panel: bool,
     hovering: bool,
     keyboard: bool,
     input_utf16: Utf16Input,
@@ -217,7 +222,7 @@ impl App {
                 while self.peeks.len() > 1 {
                     self.peeks.pop_front();
                 }
-                if !self.hovering && !self.keyboard && !self.dragging && !self.cursor_inside() {
+                if !self.explicit_panel && !self.hovering && !self.keyboard && !self.dragging && !self.cursor_inside() {
                     self.set_expanded(false);
                 }
             }
@@ -338,6 +343,9 @@ impl App {
 
     /// Runs the animation timer at `interval_ms` (re-arming it if the period changes).
     fn set_anim_interval(&mut self, interval_ms: u32) {
+        if self.hidden_for_fullscreen {
+            return;
+        }
         if self.anim_interval != interval_ms {
             self.anim_interval = interval_ms;
             unsafe {
@@ -346,11 +354,19 @@ impl App {
         }
     }
 
+    fn stop_animation(&mut self) {
+        self.animating = false;
+        self.anim_interval = 0;
+        unsafe {
+            let _ = KillTimer(self.hwnd, TIMER_ANIM);
+        }
+    }
+
     /// Windows can drop a topmost window below normal windows (e.g. after an app
     /// leaves fullscreen or the shell restarts). Re-assert our place every tick,
     /// and step aside while a fullscreen app is in front.
     fn guard_z_order(&mut self) {
-        let fullscreen = unsafe {
+        let fullscreen = !self.explicit_panel && unsafe {
             matches!(
                 SHQueryUserNotificationState(),
                 Ok(QUNS_BUSY) | Ok(QUNS_RUNNING_D3D_FULL_SCREEN) | Ok(QUNS_PRESENTATION_MODE)
@@ -358,6 +374,15 @@ impl App {
         };
         if fullscreen != self.hidden_for_fullscreen {
             self.hidden_for_fullscreen = fullscreen;
+            self.sync_mascot_timer();
+            if fullscreen {
+                self.stop_animation();
+            } else {
+                // Functional state kept advancing while hidden. Resume from
+                // now, without treating the hidden interval as an animation frame.
+                self.mascot_last = Instant::now();
+                self.start_animation();
+            }
             unsafe {
                 let _ = ShowWindow(self.hwnd, if fullscreen { SW_HIDE } else { SW_SHOWNOACTIVATE });
             }
@@ -378,6 +403,9 @@ impl App {
     }
 
     fn start_animation(&mut self) {
+        if self.hidden_for_fullscreen {
+            return;
+        }
         if !self.animating {
             self.animating = true;
             self.last_frame = Instant::now();
@@ -386,6 +414,12 @@ impl App {
     }
 
     fn set_expanded(&mut self, expanded: bool) {
+        if !expanded && self.explicit_panel {
+            self.finish_page_edit();
+            self.explicit_panel = false;
+            self.guard_z_order();
+            self.apply_panel_style();
+        }
         let target = if expanded { 1.0 } else { 0.0 };
         if self.expand.target != target {
             self.expand.target = target;
@@ -395,6 +429,46 @@ impl App {
         if !expanded {
             self.show_next_peek();
         }
+    }
+
+    /// Expose an explicitly opened panel to taskbar/Alt-Tab, retaining the
+    /// composition window style. Returning to the capsule restores tool-window behavior.
+    fn apply_panel_style(&self) {
+        unsafe {
+            let old = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE) as u32;
+            let mode_mask = WS_EX_APPWINDOW.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0;
+            let mode = if self.explicit_panel {
+                WS_EX_APPWINDOW.0
+            } else {
+                WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0
+            };
+            let style = (old & !mode_mask) | mode;
+            if style != old {
+                // The shell updates taskbar membership when the window is shown again.
+                let _ = ShowWindow(self.hwnd, SW_HIDE);
+                SetWindowLongPtrW(self.hwnd, GWL_EXSTYLE, style as isize);
+                let _ = SetWindowPos(
+                    self.hwnd, HWND::default(), 0, 0, 0, 0,
+                    SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                if !self.hidden_for_fullscreen {
+                    let _ = ShowWindow(self.hwnd, if self.explicit_panel { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE });
+                }
+            }
+        }
+    }
+
+    fn open_panel(&mut self) {
+        self.explicit_panel = true;
+        self.guard_z_order();
+        self.apply_panel_style();
+        self.set_expanded(true);
+        unsafe {
+            let _ = ShowWindow(self.hwnd, SW_SHOWNORMAL);
+            let _ = SetForegroundWindow(self.hwnd);
+            let _ = SetFocus(self.hwnd);
+        }
+        self.redraw();
     }
 
     fn go_to(&mut self, index: usize) {
@@ -411,6 +485,11 @@ impl App {
     }
 
     fn step_animation(&mut self) {
+        // KillTimer does not remove WM_TIMER messages already in the queue.
+        if self.hidden_for_fullscreen {
+            self.stop_animation();
+            return;
+        }
         let now = Instant::now();
         let dt = (now - self.last_frame).as_secs_f32().min(1.0 / 30.0);
         self.last_frame = now;
@@ -421,11 +500,7 @@ impl App {
         self.update_region();
         self.redraw();
         if !a && !b && !c && !d {
-            self.animating = false;
-            self.anim_interval = 0;
-            unsafe {
-                let _ = KillTimer(self.hwnd, TIMER_ANIM);
-            }
+            self.stop_animation();
         } else if !a && !b {
             // Only ambient animation left: 30 fps is plenty and saves CPU.
             self.set_anim_interval(33);
@@ -433,6 +508,11 @@ impl App {
     }
 
     fn redraw(&mut self) {
+        // Worker results, timer state and edits still update while hidden;
+        // none of those paths should decode/draw/present an invisible frame.
+        if self.hidden_for_fullscreen {
+            return;
+        }
         let panel = self.panel();
         let t = self.expand.value;
         let ht = self.height_t();
@@ -648,7 +728,7 @@ impl App {
         if self.cursor_inside() {
             self.hovering = true;
             self.track_leave();
-        } else if !self.keyboard && !self.dragging && !self.pinned && !self.pages[self.current].editing() {
+        } else if !self.explicit_panel && !self.keyboard && !self.dragging && !self.pinned && !self.pages[self.current].editing() {
             self.set_expanded(false);
         }
     }
@@ -758,7 +838,7 @@ impl App {
             return;
         }
         self.finish_page_edit();
-        if !self.hovering && !self.pinned {
+        if !self.explicit_panel && !self.hovering && !self.pinned {
             self.set_expanded(false);
         }
         if !self.animating {
@@ -773,7 +853,25 @@ impl App {
     }
 
     fn on_key(&mut self, vk: u16) {
+        // Escape first cancels an active editor; a subsequent Escape returns
+        // an explicitly opened panel to its normal low-distraction capsule.
+        if vk == VK_ESCAPE.0 && self.explicit_panel && !self.keyboard {
+            self.set_expanded(false);
+            return;
+        }
         if !self.keyboard {
+            return;
+        }
+        if vk == VK_V.0 && unsafe { GetKeyState(VK_CONTROL.0 as i32) } < 0 {
+            if let Some(text) = droptarget::clipboard_text() {
+                let mut redraw = false;
+                for ch in text.chars().filter(|ch| !ch.is_control()).take(120) {
+                    redraw |= self.pages[self.current].on_char(ch);
+                }
+                if redraw && !self.animating {
+                    self.redraw();
+                }
+            }
             return;
         }
         let redraw = self.pages[self.current].on_key(vk);
@@ -821,10 +919,10 @@ impl App {
         self.mascot.update(dt, idle_ms, eligible, cursor)
     }
 
-    /// Arms the idle poll only while the optional mascot is enabled.
+    /// Arms the idle poll only while the optional mascot is enabled and visible.
     fn sync_mascot_timer(&self) {
         unsafe {
-            if self.mascot_enabled {
+            if self.mascot_enabled && !self.hidden_for_fullscreen {
                 SetTimer(self.hwnd, TIMER_MASCOT, 500, None);
             } else {
                 let _ = KillTimer(self.hwnd, TIMER_MASCOT);
@@ -835,7 +933,7 @@ impl App {
     /// Polls idle time twice a second while no animation is running, so the
     /// mascot can appear after 15 s of inactivity.
     fn on_mascot_timer(&mut self) {
-        if self.mascot_enabled && !self.animating && self.step_mascot() {
+        if self.mascot_enabled && !self.hidden_for_fullscreen && !self.animating && self.step_mascot() {
             self.start_animation();
         }
     }
@@ -843,6 +941,7 @@ impl App {
     fn show_tray_menu(&mut self) {
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
+            let _ = AppendMenuW(menu, MF_STRING, MENU_OPEN, w!("Open panel"));
             let startup_flags = if startup_enabled() { MF_STRING | MF_CHECKED } else { MF_STRING };
             let _ = AppendMenuW(menu, startup_flags, MENU_STARTUP, w!("Start with Windows"));
             let mascot_flags = if self.mascot_enabled { MF_STRING | MF_CHECKED } else { MF_STRING };
@@ -857,6 +956,7 @@ impl App {
             let cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, pt.x, pt.y, 0, self.hwnd, None);
             let _ = DestroyMenu(menu);
             match cmd.0 as usize {
+                MENU_OPEN => self.open_panel(),
                 MENU_STARTUP => set_startup(!startup_enabled()),
                 MENU_MASCOT => {
                     let value = if self.mascot_enabled { "0" } else { "1" };
@@ -954,7 +1054,7 @@ fn set_startup(enable: bool) {
     unsafe {
         if enable {
             let Ok(exe) = std::env::current_exe() else { return };
-            let value: Vec<u16> = format!("\"{}\"", exe.display()).encode_utf16().chain(Some(0)).collect();
+            let value: Vec<u16> = format!("\"{}\" --background", exe.display()).encode_utf16().chain(Some(0)).collect();
             let _ = RegSetKeyValueW(
                 HKEY_CURRENT_USER,
                 RUN_KEY,
@@ -1079,6 +1179,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             }
             WM_KEYDOWN => app.on_key(wparam.0 as u16),
             WM_KILLFOCUS => app.end_keyboard(),
+            WM_CONTEXTMENU => app.show_tray_menu(),
             WM_DROPFILES => app.on_drop(dropped_paths(HDROP(wparam.0 as _))),
             WM_TIMER if wparam.0 == TIMER_ANIM => app.step_animation(),
             WM_TIMER if wparam.0 == TIMER_TICK => app.on_tick(),
@@ -1087,6 +1188,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             WM_TIMER if wparam.0 == TIMER_PEEK => app.on_peek_timer(),
             WM_APP_CMD => app.on_commands(),
             WM_APP_WAKE => app.on_wake(),
+            WM_APP_OPEN => app.open_panel(),
             WM_APP_TRAY => {
                 let event = (lparam.0 & 0xFFFF) as u32;
                 if event == WM_RBUTTONUP || event == WM_CONTEXTMENU {
@@ -1107,7 +1209,17 @@ fn dev_offset_x() -> i32 {
     std::env::var("NOTCHLITE_OFFSET_X").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
 }
 
-pub fn run() -> Result<()> {
+/// Ask the already running instance to open its real panel.
+/// No process is started and no user content is passed in the window message.
+pub fn request_open_existing() -> Result<bool> {
+    unsafe {
+        let Ok(hwnd) = FindWindowW(w!("NotchLiteWindow"), None) else { return Ok(false) };
+        PostMessageW(hwnd, WM_APP_OPEN, WPARAM(0), LPARAM(0))?;
+        Ok(true)
+    }
+}
+
+pub fn run(open_panel: bool) -> Result<()> {
     unsafe {
         let instance = GetModuleHandleW(None)?;
         let class = w!("NotchLiteWindow");
@@ -1127,8 +1239,9 @@ pub fn run() -> Result<()> {
         let px_h = (theme::WINDOW_H * scale).round() as i32;
         let screen_w = GetSystemMetrics(SM_CXSCREEN);
 
+        let interaction_style = if open_panel { WS_EX_APPWINDOW } else { WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE };
         let hwnd = CreateWindowExW(
-            WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_ACCEPTFILES,
+            WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_ACCEPTFILES | interaction_style,
             class,
             w!("NotchLite"),
             WS_POPUP,
@@ -1148,7 +1261,7 @@ pub fn run() -> Result<()> {
             hwnd,
             gfx,
             scale,
-            expand: Spring::new(0.0, theme::SIZE_STIFFNESS, theme::SIZE_DAMPING),
+            expand: Spring::new(if open_panel { 1.0 } else { 0.0 }, theme::SIZE_STIFFNESS, theme::SIZE_DAMPING),
             width: Spring::new(theme::COLLAPSED_W, theme::SIZE_STIFFNESS, theme::SIZE_DAMPING),
             height: Spring::new(theme::COLLAPSED_H, theme::SIZE_STIFFNESS, theme::SIZE_DAMPING),
             peek_t: Spring::new(0.0, 300.0, 30.0),
@@ -1158,6 +1271,7 @@ pub fn run() -> Result<()> {
             anim_interval: 0,
             last_region: (0, 0, 0),
             hidden_for_fullscreen: false,
+            explicit_panel: open_panel,
             hovering: false,
             keyboard: false,
             input_utf16: Utf16Input::default(),
@@ -1179,18 +1293,28 @@ pub fn run() -> Result<()> {
             dragging: false,
             pinned: false,
         };
+        // Determine visibility before reload_settings can request the first
+        // frame, so starting during fullscreen does not briefly show the notch.
+        app.guard_z_order();
         app.reload_settings();
         app.width.snap(app.width.target);
         app.height.snap(app.height.target);
         app.update_region();
         app.redraw();
+        let initially_visible = !app.hidden_for_fullscreen;
         APP.with(|cell| *cell.borrow_mut() = Some(app));
 
         add_tray_icon(hwnd);
         // OLE drop target: gives drag-over feedback (expand to the shelf) and
         // accepts links; WM_DROPFILES stays as a fallback if this fails.
         let _ = RegisterDragDrop(hwnd, &droptarget::create(Box::new(ShellDrop)));
-        let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        if initially_visible {
+            let _ = ShowWindow(hwnd, if open_panel { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE });
+            if open_panel {
+                let _ = SetForegroundWindow(hwnd);
+                let _ = SetFocus(hwnd);
+            }
+        }
         SetTimer(hwnd, TIMER_TICK, 1000, None);
         // Development aid: `NOTCHLITE_TEST_PEEK=1` shows a sample peek at startup.
         if std::env::var_os("NOTCHLITE_TEST_PEEK").is_some() {

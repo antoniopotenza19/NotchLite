@@ -1,4 +1,4 @@
-// Modified for NotchLite: isolated identity and opt-in first-run profile.
+// Modified for NotchLite: isolated identity, opt-in profile and explicit panel opening.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod anim;
@@ -20,9 +20,13 @@ use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let open_panel = !std::env::args_os().skip(1).any(|arg| arg == "--background");
     unsafe {
         let _mutex = CreateMutexW(None, true, w!("Local\\NotchLite.SingleInstance"))?;
         if GetLastError() == ERROR_ALREADY_EXISTS {
+            if open_panel {
+                shell::request_open_existing()?;
+            }
             return Ok(());
         }
         profile::initialize_at(&store::data_dir().join("settings.txt"))?;
@@ -30,6 +34,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OleInitialize(None)?;
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
-    shell::run()?;
+    shell::run(open_panel)?;
     Ok(())
 }

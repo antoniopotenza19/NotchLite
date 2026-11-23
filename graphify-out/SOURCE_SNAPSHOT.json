@@ -1,0 +1,44 @@
+{
+  "source_root": "src",
+  "tool": {
+    "distribution": "graphifyy",
+    "version": "0.8.26",
+    "repository": "https://github.com/safishamsi/graphify",
+    "mode": "local AST only"
+  },
+  "source_sha256": {
+    "src/anim.rs": "263d4f1965252c29044de039dedd06fbc0b639416a0f91750ae90623e072e666",
+    "src/droptarget.rs": "e8d7138bdf973494733a146d8482b5a78d8c93bc6159d92df6a0d927efb864ac",
+    "src/gfx.rs": "0e7a48516b91e617d749fb7e793fada447ec777b901d7fa5c2c931de487f26af",
+    "src/http.rs": "9630ee1c4df759ff6999a99909e7342ee0fbf0a8ac606217e5a177521dd152b0",
+    "src/main.rs": "d846dc88685f2af8494d4ff43e9712baa89866e691d3308b1b50fc60866b963a",
+    "src/mascot.rs": "fcb7bf2d9df71e90de87f7ae95fc9614d7c9b03e231b43d195ad9ed463b03f28",
+    "src/pages/calendar.rs": "e84a20b52eb4863a59d2b944445b7e1e1acfa61b4479be82b5570dbeb041ad07",
+    "src/pages/claude.rs": "d12f46d170a6b5f55fb4ff30e9142827fe69f5746ad2e119e9a4de993b53802d",
+    "src/pages/focus.rs": "37091361399f8fa692942c3ca81d10094aaba81a891c69a9d837155c3db4abf4",
+    "src/pages/football.rs": "cdd10611f34602f1bffdcc29a8d6f90e4b6726220b98dbe266b60d92ac6b1b88",
+    "src/pages/media.rs": "1c5bca8964d37f19bdf2625c9d3c092c49b6b43810ff5bd480e622be80597f10",
+    "src/pages/mod.rs": "66becb4ad7900e2b4cf323bb6ab5919d30cfe7fa72d18a7e3d33f71674d89094",
+    "src/pages/notifications.rs": "0087dcbe99c2ead06230ac834da7d886231ff0e5c74d9b0f286f1ece88c8941e",
+    "src/pages/settings.rs": "1b3f917dae226e01477588e6d406f5bb577e28b9c38dc82994e26c1ad6b2bdd3",
+    "src/pages/shelf.rs": "6fd85dc34d2bd4cd1adfd223c1ed0c4d398159eca0e382917823a24a9b888e2c",
+    "src/pages/system.rs": "0c77b7e0abc431efcc65caef9f1cb792650bb2c7a4f7d83c1e37bf99e4077a85",
+    "src/pages/textfield.rs": "0f3cdd3f3007edc093c725c2035505f1fab733211e4f2de9540a88d11759523a",
+    "src/pages/todo.rs": "09894f4cb11fe456e7cf0acff1b2253316bc8bdad2e41f1df9d1f6278963aaac",
+    "src/pages/weather.rs": "9fb2a37ca30c4df7e829c5b0e32e6ca2a9649fd55ea35f676a5d365832610b57",
+    "src/profile.rs": "99cbe83354d2401a544b78b286e368e7702ee07ffb45d671c44eefa391ab232c",
+    "src/shell.rs": "e95350e393cefa0d85ffca6f09db30b54dc66e3187d23700067e6ea4468191fe",
+    "src/store.rs": "dbd559ae154e54c16249c5ad8e2876e762af198452941bb4b4ee3f851817f143",
+    "src/theme.rs": "9d733cb0edfabaa256fbba00df32b8df260d374ffcb555c19125b2d0cfa543ae",
+    "src/worker.rs": "1cf0b0af82305f362651e29aaa1309e4ec1d26208b8d096e4cd3847ffc909ec6"
+  },
+  "file_count": 24,
+  "node_count": 893,
+  "edge_count": 2105,
+  "community_count": 22,
+  "directed": true,
+  "additional_llm_tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

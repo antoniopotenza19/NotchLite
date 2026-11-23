@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "name": "NotchLite development",
+  "scope": "this repository",
+  "runtime_dependencies_added": [],
+  "activation": "Select only the roles needed for the user's change; small low-impact fixes may be completed by one agent.",
+  "authority": "Inherit current user authorization and host permissions; do not create new approvals or permissions.",
+  "roles": [
+    {
+      "id": "coordinator",
+      "responsibility": "Scope, ownership, observable acceptance criteria and integration",
+      "writes": "Task-authorized files"
+    },
+    {
+      "id": "map",
+      "responsibility": "Current structure, callers, shared state and boundaries; Graphify if already present",
+      "writes": "Assigned graph artifacts and notes",
+      "deliverable": "Source references and snapshot hashes"
+    },
+    {
+      "id": "implementation",
+      "responsibility": "Smallest complete correction, callers and meaningful regression check",
+      "writes": "Explicitly assigned product files and tests"
+    },
+    {
+      "id": "review",
+      "responsibility": "Independent Ponytail review when justified; concrete cases and counterevidence",
+      "writes": "Assigned report only",
+      "deliverable": "Confirmed findings separated from hypotheses"
+    },
+    {
+      "id": "validation",
+      "responsibility": "Allowed builds, synthetic tests, interaction checks and scenario-specific performance evidence",
+      "writes": "Assigned synthetic fixtures, logs and reports"
+    }
+  ],
+  "skills": {
+    "development": ".agents/skills/notchlite-development/SKILL.md",
+    "review": ".agents/skills/ponytail-review/SKILL.md"
+  },
+  "graph": {
+    "refresh_script": "tools/Update-CodeGraph.ps1",
+    "output": "graphify-out",
+    "optional": true,
+    "install_automatically": false,
+    "backend": "local AST only"
+  }
+}

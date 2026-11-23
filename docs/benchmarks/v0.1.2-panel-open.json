@@ -1,0 +1,43 @@
+{
+  "label": "v012-panel-open",
+  "process_name": "notchlite",
+  "os": "Microsoft Windows NT 10.0.26300.0",
+  "logical_processors": 8,
+  "samples": 60,
+  "elapsed_seconds": 60.647,
+  "cpu_percent_total": 0.0258,
+  "cpu_percent_one_core": 0.2061,
+  "private_mib_mean": 40.28393333333336,
+  "private_mib_sampled_max": 45.723,
+  "working_set_mib_mean": 42.76276666666668,
+  "working_set_mib_sampled_max": 46.422,
+  "threads_sampled_max": 17.0,
+  "handles_sampled_max": 1086.0,
+  "excludes": [
+    "GPU memory",
+    "other processes",
+    "visual latency"
+  ],
+  "version": "0.1.2",
+  "date": "2026-11-23",
+  "scenario": "explicit panel open, idle, no scripted interaction",
+  "modules": [
+    "shelf",
+    "todo",
+    "focus",
+    "settings"
+  ],
+  "disabled": [
+    "media",
+    "calendar",
+    "weather",
+    "football",
+    "system",
+    "claude",
+    "notifications"
+  ],
+  "mascot": false,
+  "warmup_seconds": 15,
+  "binary_sha256": "e06eb2b9ccfcd3f2415513edbf23a0325051d3cf49a69d8ba993f5441da4e27e",
+  "profile_verified_after_sample": true
+}

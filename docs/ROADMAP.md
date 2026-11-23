@@ -26,6 +26,8 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 
 Le fasi comprendono tutte le funzioni sopra; l'ordine serve a mantenere misurabile il costo di ciascuna.
 
+Priorità aggiornata: il risultato visivo completo del desktop viene prima delle integrazioni telefono/streaming. La preview attuale copre soprattutto la notch. Vedere [DESKTOP-EXPERIENCE.md](DESKTOP-EXPERIENCE.md) per barra, sfondo, orologio, widget e profili Leggero/Vetro: sono obiettivi ancora da implementare, non funzioni già presenti.
+
 ## Fase 0 — base e misure
 
 Compilare il fork, eseguire i test, verificare il profilo iniziale e registrare i consumi. Criterio: avvio, espansione, chiusura e uscita affidabili; dati separati da Ada; nessuna impostazione utente sovrascritta.
@@ -35,6 +37,8 @@ Compilare il fork, eseguire i test, verificare il profilo iniziale e registrare 
 Musica, volume, microfono, avvio rapido app, deposito file, appunti e timer. Interfaccia con accesso diretto alle funzioni preferite, comandi grandi e impostazioni separate. Criterio: ogni comando funziona con tastiera e mouse; disabilitare un modulo ne interrompe anche le attività in background, dopo gli eventuali timeout documentati.
 
 ## Fase 2 — organizzazione e desktop
+
+Questa fase diventa prioritaria dopo la base di apertura/affidabilità: preset coordinato, sfondo statico, orologio e widget desktop, poi barra/dock. Vetro e sfondo animato saranno opzioni misurate separatamente.
 
 Promemoria ricorrenti, calendario, meteo, notifiche, widget e monitor multipli. Criterio: prove al 100/125/150/200% DPI, sleep/resume, monitor scollegato, desktop remoto e comportamento a schermo intero.
 
