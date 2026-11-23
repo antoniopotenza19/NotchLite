@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Pomodoro focus timer with collapsed live activity and daily session count.
 
 use std::collections::BTreeMap;
@@ -57,16 +58,16 @@ impl Phase {
 
     fn ring_color(self) -> Color {
         match self {
-            Phase::Focus => theme::ACCENT,
-            Phase::ShortBreak | Phase::LongBreak => theme::BLUE,
+            Phase::Focus => theme::accent(),
+            Phase::ShortBreak | Phase::LongBreak => theme::blue(),
         }
     }
 
     fn peek_info(self) -> (&'static str, &'static str, Color) {
         match self {
-            Phase::Focus => ("Focus Time!", "Back to work, 25 min", theme::DANGER),
-            Phase::ShortBreak => ("Break Time!", "5 minute short break", theme::ACCENT),
-            Phase::LongBreak => ("Long Break!", "15 min, you earned it", theme::ACCENT),
+            Phase::Focus => ("Focus Time!", "Back to work, 25 min", theme::danger()),
+            Phase::ShortBreak => ("Break Time!", "5 minute short break", theme::accent()),
+            Phase::LongBreak => ("Long Break!", "15 min, you earned it", theme::accent()),
         }
     }
 }
@@ -316,7 +317,7 @@ impl Page for FocusPage {
         let (rem, total, label, ring_color, primary_label) = match self.state {
             State::Idle => {
                 let d = Phase::Focus.duration();
-                (d, d, "Pomodoro", theme::ACCENT, "Start")
+                (d, d, "Pomodoro", theme::accent(), "Start")
             }
             State::Running { phase, ends_at } => (
                 ends_at.saturating_duration_since(Instant::now()),
@@ -329,7 +330,7 @@ impl Page for FocusPage {
                 remaining,
                 phase.duration(),
                 phase.label(),
-                theme::WARN,
+                theme::warn(),
                 "Resume",
             ),
         };
@@ -343,12 +344,12 @@ impl Page for FocusPage {
         ctx.text(
             &time_str,
             Rect::new(center.x - 30.0, center.y - 13.0, 60.0, 26.0),
-            TextStyle::new(18.0, Weight::Bold, theme::TEXT).align(Align::Center),
+            TextStyle::new(18.0, Weight::Bold, theme::text()).align(Align::Center),
         );
         ctx.text(
             label,
             Rect::new(lay.left.x, area.y + 72.0, lay.left.w, 16.0),
-            TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+            TextStyle::new(11.0, Weight::Medium, theme::text_dim()).align(Align::Center),
         );
 
         let labels = [primary_label, "Reset", "Skip"];
@@ -356,12 +357,12 @@ impl Page for FocusPage {
             let idx = btn as usize;
             let rect = lay.buttons[idx];
             let hovered = self.hover == Some(btn);
-            ctx.fill_rect(rect, 12.0, if hovered { theme::CARD_HOVER } else { theme::CARD });
+            ctx.fill_rect(rect, 12.0, if hovered { theme::card_hover() } else { theme::card() });
             let weight = if btn == Btn::Primary { Weight::Semibold } else { Weight::Medium };
             ctx.text(
                 labels[idx],
                 rect,
-                TextStyle::new(12.5, weight, theme::TEXT).align(Align::Center),
+                TextStyle::new(12.5, weight, theme::text()).align(Align::Center),
             );
         }
 
@@ -369,7 +370,7 @@ impl Page for FocusPage {
         ctx.text(
             &session_line,
             lay.info,
-            TextStyle::new(11.5, Weight::Regular, theme::TEXT_DIM).align(Align::Center),
+            TextStyle::new(11.5, Weight::Regular, theme::text_dim()).align(Align::Center),
         );
     }
 
@@ -411,14 +412,14 @@ impl Page for FocusPage {
         };
         let total = phase.duration();
         let fraction = (rem.as_secs_f32() / total.as_secs_f32()).clamp(0.0, 1.0);
-        let color = if paused { theme::WARN } else { phase.ring_color() };
+        let color = if paused { theme::warn() } else { phase.ring_color() };
 
         let center = Point { x: notch.x + 18.0, y: notch.h / 2.0 };
         ctx.stroke_circle(center, 7.0, color.with_alpha(0.25), 2.0);
         ctx.arc(center, 7.0, fraction, color, 2.0);
 
         let time_str = format_mm_ss(rem, total.as_secs());
-        let time_style = TextStyle::new(13.0, Weight::Bold, theme::TEXT).align(Align::Right);
+        let time_style = TextStyle::new(13.0, Weight::Bold, theme::text()).align(Align::Right);
         let time_w = (ctx.measure_text(&time_str, &time_style) + 4.0).max(40.0);
         let time_x = (notch.right() - 14.0 - time_w).max(notch.x);
         ctx.text(&time_str, Rect::new(time_x, notch.y, time_w, notch.h), time_style);
@@ -429,7 +430,7 @@ impl Page for FocusPage {
             ctx.text(
                 phase.short_label(),
                 Rect::new(mid_x, notch.y, mid_w, notch.h),
-                TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                TextStyle::new(11.0, Weight::Medium, theme::text_dim()).align(Align::Center),
             );
         }
     }

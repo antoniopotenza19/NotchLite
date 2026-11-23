@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Live CPU and memory usage gauges with a 60-second CPU sparkline.
 
 use windows::Win32::Foundation::FILETIME;
@@ -82,11 +83,11 @@ impl Page for SystemPage {
 
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
         if self.cpu_pct.is_none() && self.ram.is_none() {
-            ctx.stroke_rect(area.inset(0.0, 2.0), 10.0, theme::BORDER, 1.0, true);
+            ctx.stroke_rect(area.inset(0.0, 2.0), 10.0, theme::border(), 1.0, true);
             ctx.text(
                 "No system data yet",
                 area,
-                TextStyle::new(12.5, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                TextStyle::new(12.5, Weight::Medium, theme::text_dim()).align(Align::Center),
             );
             return;
         }
@@ -110,7 +111,7 @@ impl Page for SystemPage {
             label_y,
             self.ram.map(|r| r.percent),
             "RAM",
-            theme::BLUE,
+            theme::blue(),
         );
 
         let card = Rect::new(
@@ -119,22 +120,22 @@ impl Page for SystemPage {
             (right_col.w - 6.0).max(0.0),
             (area.h - 4.0).max(0.0),
         );
-        ctx.fill_rect(card, 10.0, theme::CARD);
+        ctx.fill_rect(card, 10.0, theme::card());
 
         let inner = card.inset(10.0, 8.0);
         ctx.text(
             "CPU",
             Rect::new(inner.x, inner.y, inner.w, 13.0),
-            TextStyle::new(10.5, Weight::Medium, theme::TEXT_FAINT),
+            TextStyle::new(10.5, Weight::Medium, theme::text_faint()),
         );
         ctx.text(
             "60s",
             Rect::new(inner.x, inner.y, inner.w, 13.0),
-            TextStyle::new(10.5, Weight::Regular, theme::TEXT_FAINT).align(Align::Right),
+            TextStyle::new(10.5, Weight::Regular, theme::text_faint()).align(Align::Right),
         );
 
         let chart = Rect::new(inner.x, inner.y + 17.0, inner.w, (inner.h - 37.0).max(0.0));
-        let guide = theme::TEXT_FAINT.with_alpha(0.16);
+        let guide = theme::text_faint().with_alpha(0.16);
         ctx.line(
             Point { x: chart.x, y: chart.y + chart.h * 0.5 },
             Point { x: chart.right(), y: chart.y + chart.h * 0.5 },
@@ -152,7 +153,7 @@ impl Page for SystemPage {
             ctx.text(
                 "Sampling…",
                 chart,
-                TextStyle::new(10.5, Weight::Regular, theme::TEXT_FAINT).align(Align::Center),
+                TextStyle::new(10.5, Weight::Regular, theme::text_faint()).align(Align::Center),
             );
         } else if self.len == 1 {
             let y = chart.bottom() - (self.sample_at(0) / 100.0).clamp(0.0, 1.0) * chart.h;
@@ -182,18 +183,18 @@ impl Page for SystemPage {
         ctx.text(
             &ram_line,
             Rect::new(inner.x, inner.bottom() - 15.0, inner.w, 15.0),
-            TextStyle::new(11.5, Weight::Medium, theme::TEXT_DIM),
+            TextStyle::new(11.5, Weight::Medium, theme::text_dim()),
         );
     }
 }
 
 fn cpu_color(pct: f32) -> Color {
     if pct > 90.0 {
-        theme::DANGER
+        theme::danger()
     } else if pct > 70.0 {
-        theme::WARN
+        theme::warn()
     } else {
-        theme::ACCENT
+        theme::accent()
     }
 }
 
@@ -205,8 +206,8 @@ fn draw_gauge(ctx: &mut DrawCtx, center: Point, label_y: f32, pct: Option<f32>, 
         ctx.arc(center, radius, p / 100.0, color, stroke);
     }
     let (value_text, value_color) = match pct {
-        Some(p) => (format!("{:.0}%", p.clamp(0.0, 100.0)), theme::TEXT),
-        None => ("—".to_string(), theme::TEXT_DIM),
+        Some(p) => (format!("{:.0}%", p.clamp(0.0, 100.0)), theme::text()),
+        None => ("—".to_string(), theme::text_dim()),
     };
     ctx.text(
         &value_text,
@@ -216,7 +217,7 @@ fn draw_gauge(ctx: &mut DrawCtx, center: Point, label_y: f32, pct: Option<f32>, 
     ctx.text(
         label,
         Rect::new(center.x - 32.0, label_y, 64.0, 18.0),
-        TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+        TextStyle::new(11.0, Weight::Medium, theme::text_dim()).align(Align::Center),
     );
 }
 

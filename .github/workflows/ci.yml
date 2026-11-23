@@ -32,6 +32,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifact/NotchLite-portatile | Out-Null
           Copy-Item target/release/notchlite.exe,LICENSE,NOTICE -Destination artifact/NotchLite-portatile
           Copy-Item docs/TRY-IT.md artifact/NotchLite-portatile/README.md
+          Copy-Item docs/APPEARANCE.md artifact/NotchLite-portatile/APPEARANCE.md
           Compress-Archive -Path artifact/NotchLite-portatile -DestinationPath artifact/NotchLite-portatile.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

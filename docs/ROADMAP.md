@@ -21,7 +21,7 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 | Chat Twitch/YouTube e stato OBS | Da implementare | API ufficiali e autenticazione |
 | Volume, luminosità, Wi-Fi e altri controlli | Non completi nella base | Azioni native e alternative per hardware |
 | Pannello con siti web | Da implementare | Componente caricato solo quando richiesto |
-| Temi e liquid glass | Grafica nativa ereditata, senza equivalenza completa | Tema originale, effetto opzionale con budget GPU |
+| Temi e liquid glass | 0.1.3: tre palette native selezionabili in Settings, GUI non provata | Preset desktop coordinato; vetro opzionale con budget GPU |
 | Lingue e accessibilità | Da sviluppare | Italiano, tastiera, contrasto e UI Automation |
 
 Le fasi comprendono tutte le funzioni sopra; l'ordine serve a mantenere misurabile il costo di ciascuna.

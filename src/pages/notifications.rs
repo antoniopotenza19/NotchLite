@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Notifications page: mirrors Windows toast notifications into the notch.
 //!
 //! A worker thread asks `UserNotificationListener` for access, then watches
@@ -160,7 +161,7 @@ impl Page for NotificationsPage {
             Status::Active => None,
         };
         if let Some(message) = message {
-            let style = TextStyle::new(12.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Center);
+            let style = TextStyle::new(12.0, Weight::Regular, theme::text_faint()).align(Align::Center);
             ctx.text(message, area, style);
             return;
         }
@@ -175,14 +176,14 @@ impl Page for NotificationsPage {
             1 => "1 recent".to_string(),
             n => format!("{n} recent"),
         };
-        ctx.text(&summary, Rect::new(top.x + 2.0, top.y, (top.w - CLEAR_W - 6.0).max(0.0), top.h), TextStyle::new(10.0, Weight::Regular, theme::TEXT_FAINT));
+        ctx.text(&summary, Rect::new(top.x + 2.0, top.y, (top.w - CLEAR_W - 6.0).max(0.0), top.h), TextStyle::new(10.0, Weight::Regular, theme::text_faint()));
         if count > 0 {
-            ctx.fill_rect(clear, CLEAR_H / 2.0, if self.hover_clear { theme::CARD_HOVER } else { theme::CARD });
-            ctx.text("Clear", clear, TextStyle::new(10.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center));
+            ctx.fill_rect(clear, CLEAR_H / 2.0, if self.hover_clear { theme::card_hover() } else { theme::card() });
+            ctx.text("Clear", clear, TextStyle::new(10.0, Weight::Medium, theme::text_dim()).align(Align::Center));
         }
 
         if self.items.is_empty() {
-            ctx.text("No notifications", list, TextStyle::new(12.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Center));
+            ctx.text("No notifications", list, TextStyle::new(12.0, Weight::Regular, theme::text_faint()).align(Align::Center));
             return;
         }
 
@@ -196,7 +197,7 @@ impl Page for NotificationsPage {
             }
             let item = &self.items[i];
             let row = Rect::new(list.x, y, list.w, ROW_H - 2.0);
-            ctx.fill_rect(row, 8.0, theme::CARD);
+            ctx.fill_rect(row, 8.0, theme::card());
 
             let inner = row.inset(8.0, 1.0);
             let time_w = 28.0;
@@ -204,23 +205,23 @@ impl Page for NotificationsPage {
             ctx.text(
                 &item.app,
                 Rect::new(line1.x, line1.y, (line1.w - time_w - 4.0).max(0.0), line1.h),
-                TextStyle::new(10.0, Weight::Regular, theme::TEXT_FAINT),
+                TextStyle::new(10.0, Weight::Regular, theme::text_faint()),
             );
             ctx.text(
                 &relative(item.time, now),
                 Rect::new(line1.right() - time_w, line1.y, time_w, line1.h),
-                TextStyle::new(10.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Right),
+                TextStyle::new(10.0, Weight::Regular, theme::text_faint()).align(Align::Right),
             );
             ctx.text(
                 &item.title,
                 Rect::new(inner.x, inner.y + 10.0, inner.w, 14.0),
-                TextStyle::new(12.5, Weight::Bold, theme::TEXT),
+                TextStyle::new(12.5, Weight::Bold, theme::text()),
             );
             if !item.body.is_empty() {
                 ctx.text(
                     &item.body,
                     Rect::new(inner.x, inner.y + 22.0, inner.w, 12.0),
-                    TextStyle::new(11.5, Weight::Regular, theme::TEXT_DIM),
+                    TextStyle::new(11.5, Weight::Regular, theme::text_dim()),
                 );
             }
         }
@@ -361,7 +362,7 @@ fn watch(tx: Sender<Msg>, waker: Waker) {
             worker::peek(Peek {
                 icon: "\u{E7E7}".to_string(),
                 emoji: false,
-                accent: theme::BLUE,
+                accent: theme::blue(),
                 title: if item.title.is_empty() { item.app.clone() } else { format!("{}: {}", item.app, item.title) },
                 body: item.body.clone(),
                 seconds: 5.0,

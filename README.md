@@ -6,9 +6,13 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale, compilata in release con Rust 1.100.0 per Windows x64 GNU. La versione 0.1.2 supera 18 test unitari. Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale, compilata in release con Rust 1.100.0 per Windows x64 GNU. La versione 0.1.3 supera 27 test unitari. Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
 
-Il doppio clic apre ora il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate sullo schermo; incolla, uscita dal menu, DPI e l'intero flusso restano da collaudare. [RAM della build corrente](docs/PERFORMANCE-0.1.2.md): 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo. La memoria GPU è esclusa.
+Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.3 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
+
+**Aspetto della notch:** tre preset nativi selezionabili in Settings > Appearance: Original, Graphite e Midnight. Colori condivisi fra pannello, pagine e controlli, etichette più leggibili e segnalazione degli errori di salvataggio. Nessun nuovo worker o dipendenza. [Palette e limiti](docs/APPEARANCE.md), [revisione corrente](docs/review/iteration-3/REVIEW.md).
+
+La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.3 non è stata misurata.
 
 **Obiettivo visivo:** personalizzare anche il desktop nel suo insieme. Barra/dock, sfondo coordinato, orologio e widget desktop non sono ancora implementati. La loro realizzazione è ora prioritaria: [esperienza desktop completa](docs/DESKTOP-EXPERIENCE.md).
 
@@ -17,7 +21,7 @@ Le funzioni ereditate sono codice presente nella base, non funzionalità certifi
 ## Modifiche iniziali
 
 - Eseguibile previsto: `notchlite.exe`; identità della finestra, mutex, voce di avvio e cartelle dati separati da Ada.
-- Primo avvio: notch minimale, senza mascotte; attivi soltanto deposito file, lista attività e timer focus.
+- Primo avvio: notch minimale, preset Graphite, senza mascotte; attivi soltanto deposito file, lista attività e timer focus. Le configurazioni esistenti sono conservate.
 - Gli altri moduli già presenti restano attivabili in Settings. I moduli disattivati non vengono costruiti all'avvio.
 - Il profilo iniziale viene scritto solo se manca il file delle impostazioni. Le scelte successive vengono conservate.
 - Il timer da 500 ms della mascotte viene attivato solo quando la mascotte è abilitata.

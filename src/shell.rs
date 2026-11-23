@@ -262,15 +262,17 @@ impl App {
         for cmd in worker::drain_commands() {
             match cmd {
                 ShellCmd::Peek(p) => self.peeks.push_back(p),
-                ShellCmd::ReloadSettings => self.reload_settings(),
+                ShellCmd::ReloadSettings => { let _ = self.reload_settings(); }
             }
         }
         self.show_next_peek();
     }
 
     /// Applies settings.txt: mascot, minimal mode and the enabled features.
-    fn reload_settings(&mut self) {
-        let settings = store::read_kv(SETTINGS_FILE);
+    fn reload_settings(&mut self) -> std::io::Result<()> {
+        // Keep the complete active snapshot if the file cannot be read.
+        let settings = store::try_read_kv(SETTINGS_FILE)?;
+        theme::apply(theme::Preset::from_setting(settings.get(theme::PRESET_KEY).map(String::as_str)));
         self.mascot_enabled = settings.get("mascot").map_or(true, |v| v != "0");
         self.sync_mascot_timer();
         self.minimal = settings.get("minimal").is_some_and(|v| v == "1");
@@ -299,13 +301,15 @@ impl App {
         if !self.animating {
             self.redraw();
         }
+        Ok(())
     }
 
     fn set_setting(&mut self, key: &str, value: &str) {
-        let mut settings = store::read_kv(SETTINGS_FILE);
+        let Ok(mut settings) = store::try_read_kv(SETTINGS_FILE) else { return };
         settings.insert(key.to_string(), value.to_string());
-        let _ = store::write_kv(SETTINGS_FILE, &settings);
-        self.reload_settings();
+        if store::write_kv(SETTINGS_FILE, &settings).is_ok() {
+            let _ = self.reload_settings();
+        }
     }
 
     /// The fully expanded panel, used to lay out expanded content.
@@ -532,7 +536,7 @@ impl App {
 
         let _ = self.gfx.frame(|ctx| {
             let (bottom, ear) = corner_radii(ht);
-            ctx.fill_notch(panel, bottom, ear, theme::BG);
+            ctx.fill_notch(panel, bottom, ear, theme::bg());
 
             let st = unsafe { GetLocalTime() };
             let clock = format!("{:02}:{:02}", st.wHour, st.wMinute);
@@ -548,7 +552,7 @@ impl App {
                     if !minimal {
                         ctx.opacity = collapsed_alpha * (1.0 - mascot.visibility());
                         draw_battery(ctx, Point { x: panel.x + 18.0, y: panel.h / 2.0 }, battery);
-                        ctx.text(&clock, panel, TextStyle::new(13.5, Weight::Bold, theme::TEXT).align(Align::Center));
+                        ctx.text(&clock, panel, TextStyle::new(13.5, Weight::Bold, theme::text()).align(Align::Center));
                     }
                 }
                 ctx.pop_clip();
@@ -568,7 +572,7 @@ impl App {
                 let p = expanded_panel;
                 let header = Rect::new(p.x, 0.0, p.w, theme::HEADER_H);
 
-                ctx.text(&title, Rect::new(p.x + 14.0, 0.0, 110.0, theme::HEADER_H), TextStyle::new(14.5, Weight::Bold, theme::TEXT));
+                ctx.text(&title, Rect::new(p.x + 14.0, 0.0, 110.0, theme::HEADER_H), TextStyle::new(14.5, Weight::Bold, theme::text()));
 
                 let date = format!(
                     "{} {} {} {}",
@@ -577,8 +581,8 @@ impl App {
                     MONTHS[(st.wMonth as usize).saturating_sub(1) % 12],
                     st.wYear
                 );
-                let date_style = TextStyle::new(12.5, Weight::Regular, theme::TEXT);
-                let clock_style = TextStyle::new(13.5, Weight::Bold, theme::TEXT);
+                let date_style = TextStyle::new(12.5, Weight::Regular, theme::text());
+                let clock_style = TextStyle::new(13.5, Weight::Bold, theme::text());
                 let date_w = ctx.measure_text(&date, &date_style);
                 let clock_w = ctx.measure_text(&clock, &clock_style);
                 let group_w = 16.0 + 8.0 + date_w + 10.0 + clock_w;
@@ -593,9 +597,9 @@ impl App {
                 let cy = body.center().y;
                 for (cx, glyph) in [(p.x + theme::ARROW_INSET, "\u{E76B}"), (p.right() - theme::ARROW_INSET, "\u{E76C}")] {
                     let c = Point { x: cx, y: cy };
-                    ctx.fill_circle(c, theme::ARROW_RADIUS, theme::CARD_HOVER);
+                    ctx.fill_circle(c, theme::ARROW_RADIUS, theme::card_hover());
                     let r = Rect::new(cx - 10.0, cy - 10.0, 20.0, 20.0);
-                    ctx.text(glyph, r, TextStyle::icon(9.0, theme::TEXT));
+                    ctx.text(glyph, r, TextStyle::icon(9.0, theme::text()));
                 }
 
                 // Page dots.
@@ -603,9 +607,9 @@ impl App {
                 let mut dx = p.center().x - total_w / 2.0;
                 for i in 0..page_count {
                     let (w, color) = if i == current {
-                        (theme::DOT_ACTIVE_W, theme::TEXT)
+                        (theme::DOT_ACTIVE_W, theme::text())
                     } else {
-                        (theme::DOT_SIZE, theme::TEXT_FAINT)
+                        (theme::DOT_SIZE, theme::text_faint())
                     };
                     let r = Rect::new(dx, theme::DOTS_Y - theme::DOT_SIZE / 2.0, w, theme::DOT_SIZE);
                     ctx.fill_rect(r, theme::DOT_SIZE / 2.0, color);
@@ -1027,16 +1031,16 @@ fn draw_peek(ctx: &mut DrawCtx, panel: Rect, p: &Peek) {
     let x = panel.x + 62.0;
     let w = (panel.right() - 18.0 - x).max(0.0);
     let mid = panel.h / 2.0 + 2.0;
-    ctx.text(&p.title, Rect::new(x, mid - 18.0, w, 18.0), TextStyle::new(13.5, Weight::Bold, theme::TEXT));
-    ctx.text(&p.body, Rect::new(x, mid, w, 18.0), TextStyle::new(12.0, Weight::Regular, theme::TEXT_DIM));
+    ctx.text(&p.title, Rect::new(x, mid - 18.0, w, 18.0), TextStyle::new(13.5, Weight::Bold, theme::text()));
+    ctx.text(&p.body, Rect::new(x, mid, w, 18.0), TextStyle::new(12.0, Weight::Regular, theme::text_dim()));
 }
 
 fn draw_battery(ctx: &mut DrawCtx, center: Point, battery: &Battery) {
     let fraction = battery.percent.map_or(1.0, |p| p as f32 / 100.0);
     let color = match battery.percent {
-        Some(p) if p <= 15 && !battery.plugged => theme::DANGER,
-        Some(p) if p <= 30 && !battery.plugged => theme::WARN,
-        _ => theme::ACCENT,
+        Some(p) if p <= 15 && !battery.plugged => theme::danger(),
+        Some(p) if p <= 30 && !battery.plugged => theme::warn(),
+        _ => theme::accent(),
     };
     ctx.stroke_circle(center, 6.5, color.with_alpha(0.25), 2.0);
     ctx.arc(center, 6.5, fraction, color, 2.0);
@@ -1296,7 +1300,7 @@ pub fn run(open_panel: bool) -> Result<()> {
         // Determine visibility before reload_settings can request the first
         // frame, so starting during fullscreen does not briefly show the notch.
         app.guard_z_order();
-        app.reload_settings();
+        app.reload_settings().map_err(|error| Error::new(E_FAIL, format!("Cannot read NotchLite settings: {error}")))?;
         app.width.snap(app.width.target);
         app.height.snap(app.height.target);
         app.update_region();
@@ -1321,7 +1325,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             worker::peek(Peek {
                 icon: "\u{1F44B}".to_string(),
                 emoji: true,
-                accent: theme::BLUE,
+                accent: theme::blue(),
                 title: "Merhaba!".to_string(),
                 body: "This is a sample peek from NotchLite".to_string(),
                 seconds: 4.0,

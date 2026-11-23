@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Remaining Claude Code rate-limit windows read from `claude-usage.json`.
 
 use std::fs;
@@ -105,11 +106,11 @@ impl Page for ClaudePage {
 
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
         let Some(data) = &self.data else {
-            ctx.stroke_rect(area.inset(0.0, 2.0), 10.0, theme::BORDER, 1.0, true);
+            ctx.stroke_rect(area.inset(0.0, 2.0), 10.0, theme::border(), 1.0, true);
             ctx.text(
                 "No usage data yet",
                 area,
-                TextStyle::new(12.5, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                TextStyle::new(12.5, Weight::Medium, theme::text_dim()).align(Align::Center),
             );
             return;
         };
@@ -184,11 +185,11 @@ impl Page for ClaudePage {
 
 fn remaining_color(rem: f32) -> Color {
     if rem > 40.0 {
-        theme::ACCENT
+        theme::accent()
     } else if rem >= 15.0 {
-        theme::WARN
+        theme::warn()
     } else {
-        theme::DANGER
+        theme::danger()
     }
 }
 
@@ -201,7 +202,7 @@ fn draw_window_card(
     limit: Option<WindowLimit>,
     reset_text: &str,
 ) {
-    ctx.fill_rect(card, 10.0, theme::CARD);
+    ctx.fill_rect(card, 10.0, theme::card());
 
     let radius = 25.0;
     let stroke = 5.0;
@@ -220,7 +221,7 @@ fn draw_window_card(
         Some(note) => format!("{base_label} · {note}"),
         None => base_label.to_string(),
     };
-    let label_style = TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM);
+    let label_style = TextStyle::new(11.0, Weight::Medium, theme::text_dim());
     let label_rect = Rect::new(col_x, card.y + 10.0, col_w, 15.0);
     ctx.text(&label, label_rect, label_style);
 
@@ -231,7 +232,7 @@ fn draw_window_card(
             ctx.text(
                 model,
                 Rect::new(col_x + used_w + 8.0, label_rect.y, avail, label_rect.h),
-                TextStyle::new(10.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Right),
+                TextStyle::new(10.0, Weight::Regular, theme::text_faint()).align(Align::Right),
             );
         }
     }
@@ -246,30 +247,30 @@ fn draw_window_card(
         ctx.text(
             &pct_str,
             ring_rect,
-            TextStyle::new(13.5, Weight::Bold, theme::TEXT).align(Align::Center),
+            TextStyle::new(13.5, Weight::Bold, theme::text()).align(Align::Center),
         );
 
         ctx.text(
             "remaining",
             Rect::new(col_x, card.y + 28.0, col_w, 22.0),
-            TextStyle::new(11.5, Weight::Medium, theme::TEXT_DIM),
+            TextStyle::new(11.5, Weight::Medium, theme::text_dim()),
         );
         ctx.text(
             reset_text,
             Rect::new(col_x, card.y + 52.0, col_w, 30.0),
-            TextStyle::new(11.0, Weight::Regular, theme::TEXT_DIM),
+            TextStyle::new(11.0, Weight::Regular, theme::text_dim()),
         );
     } else {
-        ctx.stroke_circle(ring_center, radius, theme::TEXT_FAINT.with_alpha(0.25), stroke);
+        ctx.stroke_circle(ring_center, radius, theme::text_faint().with_alpha(0.25), stroke);
         ctx.text(
             "—",
             ring_rect,
-            TextStyle::new(13.5, Weight::Bold, theme::TEXT_FAINT).align(Align::Center),
+            TextStyle::new(13.5, Weight::Bold, theme::text_faint()).align(Align::Center),
         );
         ctx.text(
             "No data",
             Rect::new(col_x, card.y + 52.0, col_w, 30.0),
-            TextStyle::new(11.0, Weight::Regular, theme::TEXT_FAINT),
+            TextStyle::new(11.0, Weight::Regular, theme::text_faint()),
         );
     }
 }

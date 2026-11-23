@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Shelf page: a temporary shelf of file references (paths, never copies).
 //! Drop files on the notch to add them, click a tile to open it, drag a tile
 //! out to Explorer/Discord/a browser to copy it there, "x" removes a tile from
@@ -66,11 +67,11 @@ impl Kind {
 
     fn glyph(self) -> (&'static str, Color) {
         match self {
-            Kind::Folder => ("\u{E8B7}", theme::WARN),
-            Kind::Image => ("\u{EB9F}", theme::BLUE),
-            Kind::Document => ("\u{E8A5}", theme::TEXT),
-            Kind::Link => ("\u{E71B}", theme::ACCENT),
-            Kind::Generic => ("\u{E7C3}", theme::TEXT_DIM),
+            Kind::Folder => ("\u{E8B7}", theme::warn()),
+            Kind::Image => ("\u{EB9F}", theme::blue()),
+            Kind::Document => ("\u{E8A5}", theme::text()),
+            Kind::Link => ("\u{E71B}", theme::accent()),
+            Kind::Generic => ("\u{E7C3}", theme::text_dim()),
         }
     }
 }
@@ -231,17 +232,17 @@ impl ShelfPage {
     }
 
     fn draw_empty(&self, ctx: &mut DrawCtx, area: Rect) {
-        ctx.stroke_rect(area, 12.0, theme::BORDER, 1.0, true);
-        ctx.text("\u{E896}", Rect::new(area.x, area.y + 10.0, area.w, 30.0), TextStyle::icon(22.0, theme::TEXT_DIM));
+        ctx.stroke_rect(area, 12.0, theme::border(), 1.0, true);
+        ctx.text("\u{E896}", Rect::new(area.x, area.y + 10.0, area.w, 30.0), TextStyle::icon(22.0, theme::text_dim()));
         ctx.text(
             "Drop files here",
             Rect::new(area.x, area.y + 42.0, area.w, 18.0),
-            TextStyle::new(13.0, Weight::Semibold, theme::TEXT).align(Align::Center),
+            TextStyle::new(13.0, Weight::Semibold, theme::text()).align(Align::Center),
         );
         ctx.text(
             "Drag out anytime \u{00B7} click to open",
             Rect::new(area.x, area.y + 60.0, area.w, 16.0),
-            TextStyle::new(11.0, Weight::Regular, theme::TEXT_DIM).align(Align::Center),
+            TextStyle::new(11.0, Weight::Regular, theme::text_dim()).align(Align::Center),
         );
     }
 }
@@ -297,23 +298,23 @@ impl Page for ShelfPage {
                 continue;
             }
             let hovered = hovered_tile == Some(i);
-            ctx.fill_rect(tile, 10.0, if hovered { theme::CARD_HOVER } else { theme::CARD });
+            ctx.fill_rect(tile, 10.0, if hovered { theme::card_hover() } else { theme::card() });
             let (glyph, color) = item.kind.glyph();
             ctx.text(glyph, Rect::new(tile.x, tile.y + 12.0, tile.w, 36.0), TextStyle::icon(28.0, color));
             ctx.text(
                 &item.name,
                 Rect::new(tile.x + 4.0, tile.y + 54.0, tile.w - 8.0, 18.0),
-                TextStyle::new(11.0, Weight::Regular, theme::TEXT).align(Align::Center),
+                TextStyle::new(11.0, Weight::Regular, theme::text()).align(Align::Center),
             );
             if hovered {
                 let c = Self::close_center(tile);
                 let on_close = hover == Hit::Close(i);
-                let bg = if on_close { theme::DANGER } else { Color::rgba(0.0, 0.0, 0.0, 0.55) };
+                let bg = if on_close { theme::danger() } else { Color::rgba(0.0, 0.0, 0.0, 0.55) };
                 ctx.fill_circle(c, CLOSE_R, bg);
                 ctx.text(
                     "\u{E711}",
                     Rect::new(c.x - CLOSE_R, c.y - CLOSE_R, CLOSE_R * 2.0, CLOSE_R * 2.0),
-                    TextStyle::icon(9.0, theme::TEXT),
+                    TextStyle::icon(9.0, theme::text()),
                 );
             }
         }
@@ -321,14 +322,14 @@ impl Page for ShelfPage {
         let plus = self.plus_rect(area);
         if plus.right() >= area.x && plus.x <= area.right() {
             if hover == Hit::Plus {
-                ctx.fill_rect(plus, 10.0, theme::CARD);
+                ctx.fill_rect(plus, 10.0, theme::card());
             }
-            ctx.stroke_rect(plus, 10.0, theme::BORDER, 1.0, true);
-            ctx.text("\u{E710}", Rect::new(plus.x, plus.y + 16.0, plus.w, 24.0), TextStyle::icon(16.0, theme::TEXT_DIM));
+            ctx.stroke_rect(plus, 10.0, theme::border(), 1.0, true);
+            ctx.text("\u{E710}", Rect::new(plus.x, plus.y + 16.0, plus.w, 24.0), TextStyle::icon(16.0, theme::text_dim()));
             ctx.text(
                 "Drop more",
                 Rect::new(plus.x, plus.y + 42.0, plus.w, 16.0),
-                TextStyle::new(9.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Center),
+                TextStyle::new(9.0, Weight::Regular, theme::text_faint()).align(Align::Center),
             );
         }
         ctx.pop_clip();

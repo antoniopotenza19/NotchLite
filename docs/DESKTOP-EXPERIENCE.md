@@ -8,7 +8,7 @@ Una composizione coerente di isola superiore, barra inferiore, sfondo, grande or
 
 | Parte | Stato NotchLite | Prossimo risultato osservabile |
 |---|---|---|
-| Isola/pannello | Presente, apertura esplicita e modalità background | Personalizzazione coerente con il resto del preset |
+| Isola/pannello | Presente; 0.1.3 aggiunge tre palette native, verificate solo da CLI | Verifica GUI e coordinamento con il resto del preset |
 | Barra inferiore/dock | Da implementare | App aperte/pinnate leggibili; ripristino della barra originale affidabile |
 | Orologio e widget sul desktop | Da implementare | Elementi posizionabili che restano sul desktop, senza coprire le app |
 | Sfondo coordinato | Da implementare | Preset statico con contrasto adatto a icone e widget |

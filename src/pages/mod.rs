@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Pages shown in the expanded notch. The shell draws the header, arrows and
 //! page dots; a page only draws inside the body rectangle it is given.
 //!
@@ -150,8 +151,8 @@ impl Page for Placeholder {
     }
 
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
-        ctx.stroke_rect(area, 12.0, theme::BORDER, 1.0, true);
-        ctx.text("Coming soon", area, TextStyle::new(13.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center));
+        ctx.stroke_rect(area, 12.0, theme::border(), 1.0, true);
+        ctx.text("Coming soon", area, TextStyle::new(13.0, Weight::Medium, theme::text_dim()).align(Align::Center));
     }
 }
 

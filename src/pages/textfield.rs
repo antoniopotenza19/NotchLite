@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Minimal single-line text input shared by pages (todo, calendar).
 //!
 //! The page owns a `TextField`, forwards `on_char` / `on_key` to it while it is
@@ -115,7 +116,7 @@ impl TextField {
     pub fn draw(&self, ctx: &mut DrawCtx, rect: Rect, style: TextStyle, hint: &str) {
         ctx.push_clip(rect);
         if self.text.is_empty() {
-            ctx.text(hint, rect, TextStyle { color: theme::TEXT_FAINT, ..style });
+            ctx.text(hint, rect, TextStyle { color: theme::text_faint(), ..style });
         }
         let prefix = &self.text[..self.byte_at(self.caret)];
         let caret_x = ctx.measure_text(prefix, &style);
@@ -128,7 +129,7 @@ impl TextField {
             let x = rect.x + caret_x - scroll;
             let cy = rect.y + rect.h / 2.0;
             let half = (style.size + 3.0) / 2.0;
-            ctx.line(Point { x, y: cy - half }, Point { x, y: cy + half }, theme::TEXT, 1.0);
+            ctx.line(Point { x, y: cy - half }, Point { x, y: cy + half }, theme::text(), 1.0);
         }
         ctx.pop_clip();
     }

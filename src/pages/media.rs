@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Now playing (Windows media transport controls) and synced lyrics (LRCLIB).
 //!
 //! A worker thread talks to the system media session: it subscribes to the
@@ -762,17 +763,17 @@ impl MediaPage {
                 ctx.image_dynamic(*key, bytes, r, 1.0);
                 // Round the corners by painting the notch background over them.
                 let w = radius * 0.42 + 0.6;
-                ctx.stroke_rect(r.inset(-w, -w), radius + w / 2.0, theme::BG, w, false);
+                ctx.stroke_rect(r.inset(-w, -w), radius + w / 2.0, theme::bg(), w, false);
             }
             None => {
-                ctx.fill_rect(r, radius, theme::CARD);
-                ctx.text(GLYPH_MUSIC, r, TextStyle::icon((r.h * 0.42).max(8.0), theme::TEXT_FAINT));
+                ctx.fill_rect(r, radius, theme::card());
+                ctx.text(GLYPH_MUSIC, r, TextStyle::icon((r.h * 0.42).max(8.0), theme::text_faint()));
             }
         }
     }
 
     fn draw_lyrics(&self, ctx: &mut DrawCtx, view: Rect, pos: f32) {
-        let state_style = TextStyle::new(12.0, Weight::Medium, theme::TEXT_FAINT).align(Align::Center);
+        let state_style = TextStyle::new(12.0, Weight::Medium, theme::text_faint()).align(Align::Center);
         match &self.lyrics {
             Lyrics::Loading => ctx.text("Loading lyrics…", view, state_style),
             Lyrics::Missing => ctx.text("Lyrics not available", view, state_style),
@@ -796,9 +797,9 @@ impl MediaPage {
                     let text = &lines[i as usize].1;
                     let text = if text.is_empty() { "\u{266A}" } else { text.as_str() };
                     let style = if d < 0.5 {
-                        TextStyle::new(13.0, Weight::Bold, theme::TEXT.with_alpha(alpha))
+                        TextStyle::new(13.0, Weight::Bold, theme::text().with_alpha(alpha))
                     } else {
-                        TextStyle::new(12.0, Weight::Medium, theme::TEXT.with_alpha(alpha))
+                        TextStyle::new(12.0, Weight::Medium, theme::text().with_alpha(alpha))
                     };
                     ctx.text(text, Rect::new(view.x, cy + rel * LYRIC_LINE_H - 10.0, view.w, 20.0), style);
                 }
@@ -808,7 +809,7 @@ impl MediaPage {
                 ctx.push_clip(view);
                 for (n, line) in lines.iter().skip(self.plain_scroll).take(4).enumerate() {
                     let r = Rect::new(view.x, view.y + 10.0 + n as f32 * LYRIC_LINE_H - 10.0, view.w, 20.0);
-                    ctx.text(line, r, TextStyle::new(12.0, Weight::Medium, theme::TEXT_DIM));
+                    ctx.text(line, r, TextStyle::new(12.0, Weight::Medium, theme::text_dim()));
                 }
                 ctx.pop_clip();
             }
@@ -817,9 +818,9 @@ impl MediaPage {
 
     fn draw_button(&self, ctx: &mut DrawCtx, r: Rect, hit: Hit, glyph: &str, size: f32) {
         if self.hover == Some(hit) {
-            ctx.fill_rect(r, 12.0, theme::CARD_HOVER);
+            ctx.fill_rect(r, 12.0, theme::card_hover());
         }
-        ctx.text(glyph, r, TextStyle::icon(size, theme::TEXT));
+        ctx.text(glyph, r, TextStyle::icon(size, theme::text()));
     }
 }
 
@@ -885,11 +886,11 @@ impl Page for MediaPage {
         let s = match &self.snap {
             Some(s) if self.has_track() => s,
             _ => {
-                ctx.text(GLYPH_MUSIC, Rect::new(area.x, area.y + 14.0, area.w, 30.0), TextStyle::icon(24.0, theme::TEXT_FAINT));
+                ctx.text(GLYPH_MUSIC, Rect::new(area.x, area.y + 14.0, area.w, 30.0), TextStyle::icon(24.0, theme::text_faint()));
                 ctx.text(
                     "Nothing playing",
                     Rect::new(area.x, area.y + 46.0, area.w, 22.0),
-                    TextStyle::new(13.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                    TextStyle::new(13.0, Weight::Medium, theme::text_dim()).align(Align::Center),
                 );
                 return;
             }
@@ -900,17 +901,17 @@ impl Page for MediaPage {
         // Art; hover hint for the lyrics toggle.
         self.draw_art(ctx, l.art, 12.0);
         if self.hover == Some(Hit::Art) {
-            ctx.stroke_rect(l.art, 12.0, theme::BORDER, 1.0, false);
+            ctx.stroke_rect(l.art, 12.0, theme::border(), 1.0, false);
         }
 
         if self.show_lyrics {
             self.draw_lyrics(ctx, l.lyrics, pos);
-            ctx.text("LRCLIB", Rect::new(l.row.x, l.row.y, 56.0, l.row.h), TextStyle::new(9.0, Weight::Medium, theme::TEXT_FAINT));
+            ctx.text("LRCLIB", Rect::new(l.row.x, l.row.y, 56.0, l.row.h), TextStyle::new(9.0, Weight::Medium, theme::text_faint()));
         } else {
             ctx.text(
                 if s.title.is_empty() { "Unknown title" } else { &s.title },
                 l.title,
-                TextStyle::new(14.0, Weight::Bold, theme::TEXT),
+                TextStyle::new(14.0, Weight::Bold, theme::text()),
             );
             let mut artist = if s.artist.is_empty() { source_label(&s.source) } else { s.artist.clone() };
             if !s.album.is_empty() && s.album != s.title {
@@ -920,19 +921,19 @@ impl Page for MediaPage {
                     artist = format!("{artist} · {}", s.album);
                 }
             }
-            ctx.text(&artist, l.artist, TextStyle::new(12.0, Weight::Regular, theme::TEXT_DIM));
+            ctx.text(&artist, l.artist, TextStyle::new(12.0, Weight::Regular, theme::text_dim()));
 
-            ctx.fill_rect(l.bar, 1.5, theme::CARD_HOVER);
+            ctx.fill_rect(l.bar, 1.5, theme::card_hover());
             if s.duration > 0.0 {
                 let frac = (pos / s.duration).clamp(0.0, 1.0);
                 if frac > 0.0 {
-                    ctx.fill_rect(Rect::new(l.bar.x, l.bar.y, (l.bar.w * frac).max(3.0), l.bar.h), 1.5, theme::TEXT);
+                    ctx.fill_rect(Rect::new(l.bar.x, l.bar.y, (l.bar.w * frac).max(3.0), l.bar.h), 1.5, theme::text());
                 }
-                let time_style = TextStyle::new(10.0, Weight::Medium, theme::TEXT_FAINT);
+                let time_style = TextStyle::new(10.0, Weight::Medium, theme::text_faint());
                 ctx.text(&fmt_time(pos), l.times, time_style);
                 ctx.text(&format!("-{}", fmt_time(s.duration - pos)), l.times, time_style.align(Align::Right));
             } else {
-                ctx.text(&fmt_time(pos), l.times, TextStyle::new(10.0, Weight::Medium, theme::TEXT_FAINT));
+                ctx.text(&fmt_time(pos), l.times, TextStyle::new(10.0, Weight::Medium, theme::text_faint()));
             }
         }
 
@@ -942,13 +943,13 @@ impl Page for MediaPage {
         self.draw_button(ctx, l.next, Hit::Next, GLYPH_NEXT, 12.0);
 
         let pill_bg = if self.show_lyrics {
-            theme::TEXT
+            theme::text()
         } else if self.hover == Some(Hit::LyricsToggle) {
-            theme::CARD_HOVER
+            theme::card_hover()
         } else {
-            theme::CARD
+            theme::card()
         };
-        let pill_fg = if self.show_lyrics { theme::BG } else { theme::TEXT_DIM };
+        let pill_fg = if self.show_lyrics { theme::bg() } else { theme::text_dim() };
         ctx.fill_rect(l.pill, 9.0, pill_bg);
         ctx.text("Lyrics", l.pill, TextStyle::new(10.0, Weight::Semibold, pill_fg).align(Align::Center));
     }
@@ -1035,7 +1036,7 @@ impl Page for MediaPage {
                 MIN_H
             };
             let x = bars_x + i as f32 * (BAR_W + BAR_GAP);
-            ctx.fill_rect(Rect::new(x, cy - h / 2.0, BAR_W, h), BAR_W / 2.0, theme::TEXT);
+            ctx.fill_rect(Rect::new(x, cy - h / 2.0, BAR_W, h), BAR_W / 2.0, theme::text());
         }
 
         let title_x = art.right() + 8.0;
@@ -1044,7 +1045,7 @@ impl Page for MediaPage {
             ctx.text(
                 &s.title,
                 Rect::new(title_x, cy - 8.0, title_w, 16.0),
-                TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM),
+                TextStyle::new(11.0, Weight::Medium, theme::text_dim()),
             );
         }
     }

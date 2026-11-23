@@ -12,7 +12,7 @@ use windows::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
 
 // Enable only local shelf, to-do and focus. Network/system probes stay opt-in.
 // An absent key in a later user-edited file retains the upstream semantics.
-pub const FIRST_RUN_SETTINGS: &str = "mascot=0\nminimal=1\ndisabled=media,calendar,weather,football,system,claude,notifications\n";
+pub const FIRST_RUN_SETTINGS: &str = "mascot=0\nminimal=1\nappearance=graphite\ndisabled=media,calendar,weather,football,system,claude,notifications\n";
 static NEXT_STAGING_ID: AtomicU64 = AtomicU64::new(0);
 
 pub fn initialize_at(path: &Path) -> io::Result<()> {

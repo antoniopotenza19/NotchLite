@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Follows one football team: live score, next match and last result, drawn
 //! like a match header with the two team crests.
 //!
@@ -428,25 +429,25 @@ fn peek_for(change: Change, ev: &Event, team: &str) -> Peek {
     let (icon, accent, title, body) = match change {
         Change::Goal { ours: true } => (
             GLYPH_BALL,
-            theme::ACCENT,
+            theme::accent(),
             format!("GOAL! {}", me.name),
             live_line,
         ),
         Change::Goal { ours: false } => (
             GLYPH_BALL,
-            theme::TEXT_DIM,
+            theme::text_dim(),
             format!("{} scored", opp.name),
             live_line,
         ),
         Change::FullTime => (
             GLYPH_FLAG,
-            theme::BLUE,
+            theme::blue(),
             "Full time".to_string(),
             scoreline(ev),
         ),
         Change::KickOff => (
             GLYPH_BALL,
-            theme::WARN,
+            theme::warn(),
             "Kick-off".to_string(),
             format!("{} \u{2013} {}", ev.home.abbr, ev.away.abbr),
         ),
@@ -829,7 +830,7 @@ fn badge_colors(side: &Side) -> (Color, Color) {
     let fg = if luminance(bg) > 0.6 {
         Color::rgba(0.06, 0.06, 0.06, 1.0)
     } else {
-        theme::TEXT
+        theme::text()
     };
     (bg, fg)
 }
@@ -989,7 +990,7 @@ fn draw_match(ctx: &mut DrawCtx, area: Rect, snap: &Snapshot, ev: &Event, kind: 
         ctx.text(
             &side.name,
             Rect::new(col.x + 2.0, area.y + 51.0, col.w - 4.0, 16.0),
-            TextStyle::new(12.0, Weight::Medium, theme::TEXT).align(Align::Center),
+            TextStyle::new(12.0, Weight::Medium, theme::text()).align(Align::Center),
         );
     }
 
@@ -998,18 +999,18 @@ fn draw_match(ctx: &mut DrawCtx, area: Rect, snap: &Snapshot, ev: &Event, kind: 
     let center = |size: f32, weight: Weight, color: Color| {
         TextStyle::new(size, weight, color).align(Align::Center)
     };
-    let faint = center(10.5, Weight::Regular, theme::TEXT_FAINT);
+    let faint = center(10.5, Weight::Regular, theme::text_faint());
     match kind {
         Shown::Next => {
             ctx.text(
                 &fmt_date(ev.ts, offset),
                 row(6.0, 22.0),
-                center(15.0, Weight::Bold, theme::TEXT),
+                center(15.0, Weight::Bold, theme::text()),
             );
             ctx.text(
                 &fmt_day_time(ev.ts, now, offset),
                 row(28.0, 16.0),
-                center(12.0, Weight::Medium, theme::TEXT_DIM),
+                center(12.0, Weight::Medium, theme::text_dim()),
             );
             ctx.text(league_name(ev.league), row(46.0, 14.0), faint);
             if let Some(last) = &snap.last {
@@ -1022,15 +1023,15 @@ fn draw_match(ctx: &mut DrawCtx, area: Rect, snap: &Snapshot, ev: &Event, kind: 
                 ev.home.score.unwrap_or(0),
                 ev.away.score.unwrap_or(0)
             );
-            ctx.text(&score, row(4.0, 34.0), center(26.0, Weight::Bold, theme::TEXT));
+            ctx.text(&score, row(4.0, 34.0), center(26.0, Weight::Bold, theme::text()));
             let minute = minute_label(ev);
             let (label, color) = match kind {
-                Shown::Live if minute == "HT" => ("\u{25CF} HT".to_string(), theme::TEXT_DIM),
+                Shown::Live if minute == "HT" => ("\u{25CF} HT".to_string(), theme::text_dim()),
                 Shown::Live => (
                     format!("\u{25CF} LIVE {minute}").trim_end().to_string(),
-                    theme::DANGER,
+                    theme::danger(),
                 ),
-                _ => ("FT".to_string(), theme::TEXT_DIM),
+                _ => ("FT".to_string(), theme::text_dim()),
             };
             ctx.text(&label, row(40.0, 16.0), center(12.0, Weight::Semibold, color));
             let comp = if kind == Shown::Last {
@@ -1048,14 +1049,14 @@ fn draw_last_line(ctx: &mut DrawCtx, r: Rect, last: &Event, team: &str) {
     let Some((res, a, b)) = result_of(last, team) else { return };
     let (_, opp, _) = ours(last, team);
     let color = match res {
-        'W' => theme::ACCENT,
-        'L' => theme::DANGER,
-        _ => theme::TEXT_DIM,
+        'W' => theme::accent(),
+        'L' => theme::danger(),
+        _ => theme::text_dim(),
     };
     let parts = [
-        ("Last: ".to_string(), theme::TEXT_FAINT),
+        ("Last: ".to_string(), theme::text_faint()),
         (format!("{res} {a}\u{2013}{b}"), color),
-        (format!(" {}", opp.name), theme::TEXT_FAINT),
+        (format!(" {}", opp.name), theme::text_faint()),
     ];
     let styles: Vec<TextStyle> = parts
         .iter()
@@ -1112,7 +1113,7 @@ impl Page for FootballPage {
     }
 
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
-        let dim = TextStyle::new(13.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center);
+        let dim = TextStyle::new(13.0, Weight::Medium, theme::text_dim()).align(Align::Center);
         let snap = match &self.state {
             Load::Loading => return ctx.text("Loading matches\u{2026}", area, dim),
             Load::Failed => return ctx.text("Couldn't load matches", area, dim),
@@ -1140,9 +1141,9 @@ impl Page for FootballPage {
         let cy = notch.y + theme::COLLAPSED_H / 2.0;
         let minute = minute_label(ev);
         let color = if minute == "HT" {
-            theme::TEXT_DIM
+            theme::text_dim()
         } else {
-            theme::DANGER
+            theme::danger()
         };
         let time_w = 48.0;
         let time = Rect::new(notch.right() - 12.0 - time_w, cy - 8.0, time_w, 16.0);
@@ -1160,7 +1161,7 @@ impl Page for FootballPage {
         ctx.text(
             &scoreline(ev),
             left,
-            TextStyle::new(12.0, Weight::Bold, theme::TEXT),
+            TextStyle::new(12.0, Weight::Bold, theme::text()),
         );
     }
 }

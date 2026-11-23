@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Calendar page: a personal local calendar. A week strip on top, the events of
 //! the selected day below. Persisted in `calendar.txt` as
 //! `YYYY-MM-DD|HH:MM|title` (empty time = all-day).
@@ -337,10 +338,10 @@ impl Page for CalendarPage {
         // Month label (click = back to today).
         let label_hover = self.hover == Some(Hit::Label);
         let month = MONTHS[(self.selected.m.clamp(1, 12) - 1) as usize];
-        let month_color = if label_hover { theme::ACCENT } else { theme::TEXT };
+        let month_color = if label_hover { theme::accent() } else { theme::text() };
         let (top, bottom) = lay.label.inset(0.0, 4.0).split_top(14.0);
         ctx.text(month, top, TextStyle::new(12.0, Weight::Semibold, month_color));
-        ctx.text(&self.selected.y.to_string(), bottom, TextStyle::new(10.0, Weight::Regular, theme::TEXT_FAINT));
+        ctx.text(&self.selected.y.to_string(), bottom, TextStyle::new(10.0, Weight::Regular, theme::text_faint()));
 
         // Week strip.
         let start = self.week_start();
@@ -353,18 +354,18 @@ impl Page for CalendarPage {
             if selected || self.hover == Some(Hit::Day(i)) {
                 let pill = Rect::new(cell.x + (cw - PILL_W) / 2.0, cell.y, PILL_W, cell.h);
                 let fill = match (selected, is_today) {
-                    (true, true) => theme::ACCENT,
-                    (true, false) => theme::TEXT,
-                    _ => theme::CARD,
+                    (true, true) => theme::accent(),
+                    (true, false) => theme::text(),
+                    _ => theme::card(),
                 };
                 ctx.fill_rect(pill, 10.0, fill);
             }
             let (letter_color, num_color, dot_color) = if selected {
-                (theme::BG.with_alpha(0.6), theme::BG, theme::BG.with_alpha(0.7))
+                (theme::bg(), theme::bg(), theme::bg().with_alpha(0.7))
             } else if is_today {
-                (theme::ACCENT, theme::ACCENT, theme::ACCENT)
+                (theme::accent(), theme::accent(), theme::accent())
             } else {
-                (theme::TEXT_FAINT, theme::TEXT, theme::TEXT_DIM)
+                (theme::text_faint(), theme::text(), theme::text_dim())
             };
             let centered = |size, weight, color| TextStyle::new(size, weight, color).align(Align::Center);
             ctx.text(
@@ -386,11 +387,11 @@ impl Page for CalendarPage {
         let evs = self.day_events();
         if self.show_empty(evs.len()) {
             let hover = self.hover == Some(Hit::Add);
-            ctx.stroke_rect(lay.lower, 12.0, if hover { theme::TEXT_DIM } else { theme::BORDER }, 1.0, true);
+            ctx.stroke_rect(lay.lower, 12.0, if hover { theme::text_dim() } else { theme::border() }, 1.0, true);
             ctx.text(
                 "No events \u{00B7} click to add",
                 lay.lower,
-                TextStyle::new(12.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Center),
+                TextStyle::new(12.0, Weight::Regular, theme::text_faint()).align(Align::Center),
             );
             return;
         }
@@ -409,21 +410,21 @@ impl Page for CalendarPage {
             }
             let hovered = hovered_pos == Some(pos);
             if hovered {
-                ctx.fill_rect(row, 5.0, theme::CARD);
+                ctx.fill_rect(row, 5.0, theme::card());
             }
             let ev = &self.events[evs[pos]];
             let (time_rect, rest) = row.inset(6.0, 0.0).split_left(TIME_W);
             let (time, time_color) = if ev.time.is_empty() {
-                ("All day", theme::TEXT_FAINT)
+                ("All day", theme::text_faint())
             } else {
-                (ev.time.as_str(), theme::TEXT_DIM)
+                (ev.time.as_str(), theme::text_dim())
             };
             ctx.text(time, time_rect, TextStyle::new(11.0, Weight::Regular, time_color));
             let title_rect = Rect::new(rest.x, rest.y, (rest.w - DEL_W).max(0.0), rest.h);
-            ctx.text(&ev.title, title_rect, TextStyle::new(12.0, Weight::Regular, theme::TEXT));
+            ctx.text(&ev.title, title_rect, TextStyle::new(12.0, Weight::Regular, theme::text()));
             if hovered {
                 let del = Rect::new(row.right() - DEL_W, row.y, DEL_W, EV_H);
-                let color = if self.hover == Some(Hit::Delete(pos)) { theme::DANGER } else { theme::TEXT_DIM };
+                let color = if self.hover == Some(Hit::Delete(pos)) { theme::danger() } else { theme::text_dim() };
                 ctx.text("\u{E711}", del, TextStyle::icon(9.0, color));
             }
         }
@@ -432,17 +433,17 @@ impl Page for CalendarPage {
         // Add-event row.
         let editing = self.field.is_active();
         let hover_add = self.hover == Some(Hit::Add) && !editing;
-        ctx.fill_rect(lay.add, 10.0, if hover_add { theme::CARD_HOVER } else { theme::CARD });
+        ctx.fill_rect(lay.add, 10.0, if hover_add { theme::card_hover() } else { theme::card() });
         if editing {
-            ctx.stroke_rect(lay.add, 10.0, theme::BORDER, 1.0, false);
+            ctx.stroke_rect(lay.add, 10.0, theme::border(), 1.0, false);
         }
         let (icon, field) = lay.add.split_left(24.0);
-        ctx.text("\u{E710}", icon, TextStyle::icon(10.0, theme::TEXT_DIM));
+        ctx.text("\u{E710}", icon, TextStyle::icon(10.0, theme::text_dim()));
         let field = Rect::new(field.x, field.y, (field.w - 8.0).max(0.0), field.h);
         if editing {
-            self.field.draw(ctx, field, TextStyle::new(12.0, Weight::Regular, theme::TEXT), "14:30 Title");
+            self.field.draw(ctx, field, TextStyle::new(12.0, Weight::Regular, theme::text()), "14:30 Title");
         } else {
-            ctx.text("Add event\u{2026}", field, TextStyle::new(12.0, Weight::Medium, theme::TEXT_DIM));
+            ctx.text("Add event\u{2026}", field, TextStyle::new(12.0, Weight::Medium, theme::text_dim()));
         }
     }
 

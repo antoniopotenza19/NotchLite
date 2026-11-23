@@ -185,11 +185,11 @@ impl Page for WeatherPage {
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
         let weather = match &self.state {
             State::Locating => {
-                ctx.text("Locating…", area, TextStyle::new(13.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center));
+                ctx.text("Locating…", area, TextStyle::new(13.0, Weight::Medium, theme::text_dim()).align(Align::Center));
                 return;
             }
             State::Failed => {
-                ctx.text("Weather unavailable", area, TextStyle::new(13.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center));
+                ctx.text("Weather unavailable", area, TextStyle::new(13.0, Weight::Medium, theme::text_dim()).align(Align::Center));
                 return;
             }
             State::Ready(w) => w,
@@ -205,12 +205,12 @@ impl Page for WeatherPage {
         ctx.text(
             &temp_str,
             Rect::new(left.x + 38.0, left.y + 1.0, (left.w - 38.0).max(0.0), 42.0),
-            TextStyle::new(28.0, Weight::Bold, theme::TEXT),
+            TextStyle::new(28.0, Weight::Bold, theme::text()),
         );
 
         let text_w = (left.w - 2.0).max(0.0);
         let sub_rect = Rect::new(left.x + 2.0, left.y + 46.0, text_w, 20.0);
-        let sub_style = TextStyle::new(12.0, Weight::Medium, theme::TEXT_DIM);
+        let sub_style = TextStyle::new(12.0, Weight::Medium, theme::text_dim());
         let cond_line = if label.is_empty() {
             weather.city.clone()
         } else {
@@ -218,7 +218,7 @@ impl Page for WeatherPage {
         };
         if self.offline {
             let off_str = " · offline";
-            let off_style = TextStyle::new(12.0, Weight::Regular, theme::TEXT_FAINT);
+            let off_style = TextStyle::new(12.0, Weight::Regular, theme::text_faint());
             let off_w = (ctx.measure_text(off_str, &off_style) + 1.0).min(sub_rect.w);
             let max_cond_w = (sub_rect.w - off_w).max(0.0);
             let raw_cond_w = ctx.measure_text(&cond_line, &sub_style);
@@ -243,15 +243,15 @@ impl Page for WeatherPage {
         ctx.text(
             &meta_line,
             Rect::new(left.x + 2.0, left.y + 67.0, text_w, 20.0),
-            TextStyle::new(11.5, Weight::Regular, theme::TEXT_DIM),
+            TextStyle::new(11.5, Weight::Regular, theme::text_dim()),
         );
 
-        ctx.fill_rect(card, 10.0, theme::CARD);
+        ctx.fill_rect(card, 10.0, theme::card());
         if weather.hourly.is_empty() {
             ctx.text(
                 "No hourly data",
                 card,
-                TextStyle::new(11.5, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                TextStyle::new(11.5, Weight::Medium, theme::text_dim()).align(Align::Center),
             );
         } else {
             let inner = card.inset(4.0, 8.0);
@@ -261,7 +261,7 @@ impl Page for WeatherPage {
                 ctx.text(
                     &entry.hour,
                     Rect::new(x, inner.y, col_w, 20.0),
-                    TextStyle::new(11.0, Weight::Medium, theme::TEXT_DIM).align(Align::Center),
+                    TextStyle::new(11.0, Weight::Medium, theme::text_dim()).align(Align::Center),
                 );
                 let (h_glyph, _) = symbol_info(&entry.symbol);
                 ctx.text(
@@ -273,7 +273,7 @@ impl Page for WeatherPage {
                 ctx.text(
                     &h_temp,
                     Rect::new(x, inner.bottom() - 20.0, col_w, 20.0),
-                    TextStyle::new(12.0, Weight::Semibold, theme::TEXT).align(Align::Center),
+                    TextStyle::new(12.0, Weight::Semibold, theme::text()).align(Align::Center),
                 );
             }
         }

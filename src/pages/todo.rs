@@ -1,3 +1,4 @@
+// Modified for NotchLite: use the shared runtime appearance palette.
 //! Todo page: add / edit / check off / delete tasks, persisted in `todo.txt`
 //! (one task per line, `0|title` or `1|title`, 1 = done).
 
@@ -223,29 +224,29 @@ impl Page for TodoPage {
         // Add field + counter.
         let adding = self.mode == Mode::Add;
         let hover_add = self.hover == Some(Hit::Add) && !adding;
-        ctx.fill_rect(lay.add, 12.0, if hover_add { theme::CARD_HOVER } else { theme::CARD });
+        ctx.fill_rect(lay.add, 12.0, if hover_add { theme::card_hover() } else { theme::card() });
         if adding {
-            ctx.stroke_rect(lay.add, 12.0, theme::BORDER, 1.0, false);
+            ctx.stroke_rect(lay.add, 12.0, theme::border(), 1.0, false);
         }
         let (icon, field) = lay.add.split_left(ADD_ICON_W);
-        ctx.text("\u{E710}", icon, TextStyle::icon(11.0, theme::TEXT_DIM));
+        ctx.text("\u{E710}", icon, TextStyle::icon(11.0, theme::text_dim()));
         let field = Rect::new(field.x, field.y, (field.w - 8.0).max(0.0), field.h);
-        let field_style = TextStyle::new(12.0, Weight::Regular, theme::TEXT);
+        let field_style = TextStyle::new(12.0, Weight::Regular, theme::text());
         if adding {
             self.field.draw(ctx, field, field_style, "Add a task\u{2026}");
         } else {
-            ctx.text("Add a task\u{2026}", field, TextStyle::new(12.0, Weight::Medium, theme::TEXT_DIM));
+            ctx.text("Add a task\u{2026}", field, TextStyle::new(12.0, Weight::Medium, theme::text_dim()));
         }
         let done = self.tasks.iter().filter(|t| t.done).count();
         ctx.text(
             &format!("{done} done"),
             lay.counter,
-            TextStyle::new(11.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Right),
+            TextStyle::new(11.0, Weight::Regular, theme::text_faint()).align(Align::Right),
         );
 
         // Task list.
         if self.tasks.is_empty() {
-            ctx.text("No tasks.", lay.list, TextStyle::new(12.0, Weight::Regular, theme::TEXT_FAINT).align(Align::Center));
+            ctx.text("No tasks.", lay.list, TextStyle::new(12.0, Weight::Regular, theme::text_faint()).align(Align::Center));
             return;
         }
         ctx.push_clip(lay.list);
@@ -259,39 +260,39 @@ impl Page for TodoPage {
             let renaming = self.mode == Mode::Rename(i);
             let hovered = hovered_row == Some(i);
             if renaming || hovered {
-                ctx.fill_rect(row, 6.0, if renaming { theme::CARD_HOVER } else { theme::CARD });
+                ctx.fill_rect(row, 6.0, if renaming { theme::card_hover() } else { theme::card() });
             }
             let task = &self.tasks[i];
 
             // Round checkbox.
             let c = Point { x: row.x + 11.0, y: row.y + ROW_H / 2.0 };
             if task.done {
-                ctx.fill_circle(c, 7.0, theme::ACCENT);
-                ctx.text("\u{E73E}", Rect::new(c.x - 8.0, c.y - 8.0, 16.0, 16.0), TextStyle::icon(9.0, theme::BG));
+                ctx.fill_circle(c, 7.0, theme::accent());
+                ctx.text("\u{E73E}", Rect::new(c.x - 8.0, c.y - 8.0, 16.0, 16.0), TextStyle::icon(9.0, theme::bg()));
             } else {
-                let color = if self.hover == Some(Hit::Check(i)) { theme::TEXT_DIM } else { theme::BORDER };
+                let color = if self.hover == Some(Hit::Check(i)) { theme::text_dim() } else { theme::border() };
                 ctx.stroke_circle(c, 6.5, color, 1.5);
             }
 
             // Title (or in-place editor).
             let title_rect = Rect::new(row.x + SIDE_W + 4.0, row.y, (row.w - SIDE_W * 2.0 - 4.0).max(0.0), ROW_H);
             if renaming {
-                self.field.draw(ctx, title_rect, TextStyle::new(12.0, Weight::Regular, theme::TEXT), "");
+                self.field.draw(ctx, title_rect, TextStyle::new(12.0, Weight::Regular, theme::text()), "");
             } else {
-                let color = if task.done { theme::TEXT_FAINT } else { theme::TEXT };
+                let color = if task.done { theme::text_faint() } else { theme::text() };
                 let style = TextStyle::new(12.0, Weight::Regular, color);
                 ctx.text(&task.title, title_rect, style);
                 if task.done {
                     let w = ctx.measure_text(&task.title, &style).min(title_rect.w);
                     let y = row.y + ROW_H / 2.0;
-                    ctx.line(Point { x: title_rect.x, y }, Point { x: title_rect.x + w, y }, theme::TEXT_FAINT, 1.0);
+                    ctx.line(Point { x: title_rect.x, y }, Point { x: title_rect.x + w, y }, theme::text_faint(), 1.0);
                 }
             }
 
             // Delete button on hover.
             if hovered {
                 let del = Rect::new(row.right() - SIDE_W, row.y, SIDE_W, ROW_H);
-                let color = if self.hover == Some(Hit::Delete(i)) { theme::DANGER } else { theme::TEXT_DIM };
+                let color = if self.hover == Some(Hit::Delete(i)) { theme::danger() } else { theme::text_dim() };
                 ctx.text("\u{E711}", del, TextStyle::icon(9.0, color));
             }
         }

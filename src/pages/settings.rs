@@ -1,10 +1,11 @@
-//! Settings page: toggle optional features, the mascot and minimal notch mode,
-//! persisted in `settings.txt`.
+//! Modified for NotchLite: appearance preset selector, fresh-map writes and
+//! visible save failures. Optional features remain individually configurable.
 
 use std::collections::BTreeMap;
+use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::gfx::{DrawCtx, Point, Rect, TextStyle, Weight};
+use crate::gfx::{Align, DrawCtx, Point, Rect, TextStyle, Weight};
 use crate::pages::{self, Host, Mouse, Page};
 use crate::store;
 use crate::theme;
@@ -22,12 +23,16 @@ const SWITCH_W: f32 = 26.0;
 const SWITCH_H: f32 = 14.0;
 const SWITCH_R: f32 = 7.0;
 const KNOB_R: f32 = 5.0;
+const ERROR_H: f32 = 18.0;
+const PRESET_VALUE_W: f32 = 60.0;
+const PRESET_ARROW_W: f32 = 12.0;
 
 /// Preserves scroll position when `ReloadSettings` recreates `SettingsPage`.
 static LAST_SCROLL: AtomicU32 = AtomicU32::new(0);
 
 #[derive(Clone, Copy)]
 enum Kind {
+    Appearance,
     Feature(&'static str),
     Flag { key: &'static str, default_on: bool },
 }
@@ -39,12 +44,43 @@ struct Row {
 
 fn is_row_on(map: &BTreeMap<String, String>, kind: Kind) -> bool {
     match kind {
+        Kind::Appearance => false,
         Kind::Feature(id) => !map
             .get(pages::DISABLED_KEY)
             .is_some_and(|v| v.split(',').any(|x| x.trim() == id)),
         Kind::Flag { key, default_on: true } => map.get(key).map_or(true, |v| v != "0"),
         Kind::Flag { key, default_on: false } => map.get(key).is_some_and(|v| v == "1"),
     }
+}
+
+fn changed_settings(mut map: BTreeMap<String, String>, kind: Kind) -> BTreeMap<String, String> {
+    let next_on = !is_row_on(&map, kind);
+    match kind {
+        Kind::Appearance => {
+            let next = theme::Preset::from_setting(map.get(theme::PRESET_KEY).map(String::as_str)).next();
+            map.insert(theme::PRESET_KEY.to_string(), next.id().to_string());
+        }
+        Kind::Feature(id) => {
+            let mut disabled: Vec<String> = map
+                .get(pages::DISABLED_KEY)
+                .map(|v| v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect())
+                .unwrap_or_default();
+            if next_on {
+                disabled.retain(|x| x != id);
+            } else if !disabled.iter().any(|x| x == id) {
+                disabled.push(id.to_string());
+            }
+            if disabled.is_empty() {
+                map.remove(pages::DISABLED_KEY);
+            } else {
+                map.insert(pages::DISABLED_KEY.to_string(), disabled.join(","));
+            }
+        }
+        Kind::Flag { key, .. } => {
+            map.insert(key.to_string(), if next_on { "1" } else { "0" }.to_string());
+        }
+    }
+    map
 }
 
 pub struct SettingsPage {
@@ -57,11 +93,13 @@ pub struct SettingsPage {
     scroll: f32,
     hover: Option<usize>,
     inside: bool,
+    save_error: bool,
 }
 
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 2);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 3);
+        rows.push(Row { label: "Appearance", kind: Kind::Appearance });
         for &(id, label) in pages::FEATURES {
             rows.push(Row { label, kind: Kind::Feature(id) });
         }
@@ -80,7 +118,12 @@ impl SettingsPage {
             scroll,
             hover: None,
             inside: false,
+            save_error: false,
         }
+    }
+
+    fn rows_area(&self, area: Rect) -> Rect {
+        Rect { h: (area.h - if self.save_error { ERROR_H } else { 0.0 }).max(0.0), ..area }
     }
 
     fn max_scroll(&self) -> f32 {
@@ -113,7 +156,7 @@ impl SettingsPage {
     }
 
     fn hit(&self, p: Point, area: Rect) -> Option<usize> {
-        if !area.contains(p) {
+        if !self.rows_area(area).contains(p) {
             return None;
         }
         self.rects.iter().position(|r| r.offset(0.0, -self.scroll).contains(p))
@@ -121,39 +164,35 @@ impl SettingsPage {
 
     fn toggle(&mut self, index: usize) {
         let Some(row) = self.rows.get(index) else { return };
-        let next_on = !is_row_on(&self.map, row.kind);
-        let kind = row.kind;
-
-        let mut map = store::read_kv(FILE);
-        match kind {
-            Kind::Feature(id) => {
-                let mut disabled: Vec<String> = map
-                    .get(pages::DISABLED_KEY)
-                    .map(|v| {
-                        v.split(',')
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if next_on {
-                    disabled.retain(|x| x != id);
-                } else if !disabled.iter().any(|x| x == id) {
-                    disabled.push(id.to_string());
-                }
-                if disabled.is_empty() {
-                    map.remove(pages::DISABLED_KEY);
-                } else {
-                    map.insert(pages::DISABLED_KEY.to_string(), disabled.join(","));
-                }
+        let fresh = match store::try_read_kv(FILE) {
+            Ok(map) => map,
+            Err(_) => {
+                self.save_error = true;
+                return;
             }
-            Kind::Flag { key, .. } => {
-                map.insert(key.to_string(), if next_on { "1" } else { "0" }.to_string());
+        };
+        let map = changed_settings(fresh, row.kind);
+        if self.commit_with(map, |map| store::write_kv(FILE, map)) {
+            worker::send(ShellCmd::ReloadSettings);
+        }
+    }
+
+    fn commit_with(
+        &mut self,
+        map: BTreeMap<String, String>,
+        write: impl FnOnce(&BTreeMap<String, String>) -> io::Result<()>,
+    ) -> bool {
+        match write(&map) {
+            Ok(()) => {
+                self.map = map;
+                self.save_error = false;
+                true
+            }
+            Err(_) => {
+                self.save_error = true;
+                false
             }
         }
-        let _ = store::write_kv(FILE, &map);
-        self.map = map;
-        worker::send(ShellCmd::ReloadSettings);
     }
 }
 
@@ -163,18 +202,30 @@ impl Page for SettingsPage {
     }
 
     fn draw(&mut self, ctx: &mut DrawCtx, area: Rect) {
-        self.view_h = area.h;
+        let rows_area = self.rows_area(area);
+        self.view_h = rows_area.h;
         self.clamp_scroll();
-        self.layout_rects(area);
+        self.layout_rects(rows_area);
 
-        ctx.push_clip(area);
+        ctx.push_clip(rows_area);
         for (i, (row, &base)) in self.rows.iter().zip(self.rects.iter()).enumerate() {
             let r = base.offset(0.0, -self.scroll);
-            if r.bottom() <= area.y || r.y >= area.bottom() {
+            if r.bottom() <= rows_area.y || r.y >= rows_area.bottom() {
                 continue;
             }
             if self.hover == Some(i) {
-                ctx.fill_rect(r, ROW_RADIUS, theme::CARD);
+                ctx.fill_rect(r, ROW_RADIUS, theme::card());
+            }
+            if matches!(row.kind, Kind::Appearance) {
+                let arrow = Rect::new(r.right() - PAD_X - PRESET_ARROW_W, r.y, PRESET_ARROW_W, ROW_H);
+                let value = Rect::new(arrow.x - 4.0 - PRESET_VALUE_W, r.y, PRESET_VALUE_W, ROW_H);
+                let label = Rect::new(r.x + PAD_X, r.y, (value.x - 4.0 - r.x - PAD_X).max(0.0), ROW_H);
+                let preset = theme::Preset::from_setting(self.map.get(theme::PRESET_KEY).map(String::as_str));
+                ctx.stroke_rect(r, ROW_RADIUS, theme::border(), 1.0, false);
+                ctx.text(row.label, label, TextStyle::new(11.5, Weight::Regular, theme::text_dim()));
+                ctx.text(preset.label(), value, TextStyle::new(11.5, Weight::Semibold, theme::text()).align(Align::Right));
+                ctx.text("\u{203A}", arrow, TextStyle::new(14.0, Weight::Medium, theme::text_dim()).align(Align::Center));
+                continue;
             }
             let on = is_row_on(&self.map, row.kind);
             let track = Rect::new(
@@ -183,33 +234,39 @@ impl Page for SettingsPage {
                 SWITCH_W,
                 SWITCH_H,
             );
-            ctx.fill_rect(track, SWITCH_R, if on { theme::ACCENT } else { theme::CARD_HOVER });
+            ctx.fill_rect(track, SWITCH_R, if on { theme::accent() } else { theme::card_hover() });
             let knob_x = if on { track.right() - SWITCH_R } else { track.x + SWITCH_R };
-            ctx.fill_circle(Point { x: knob_x, y: track.center().y }, KNOB_R, theme::TEXT);
+            ctx.fill_circle(Point { x: knob_x, y: track.center().y }, KNOB_R, if on { theme::bg() } else { theme::text() });
 
             let label_x = r.x + PAD_X;
             let label_w = (track.x - LABEL_GAP - label_x).max(0.0);
             let label_rect = Rect::new(label_x, r.y, label_w, ROW_H);
-            ctx.text(row.label, label_rect, TextStyle::new(12.0, Weight::Regular, theme::TEXT));
+            ctx.text(row.label, label_rect, TextStyle::new(12.0, Weight::Regular, theme::text()));
         }
         ctx.pop_clip();
+        if self.save_error {
+            let error_area = Rect::new(area.x, rows_area.bottom(), area.w, (area.bottom() - rows_area.bottom()).max(0.0));
+            ctx.text("Could not save settings. Try again.", error_area, TextStyle::new(10.5, Weight::Medium, theme::danger()));
+        }
     }
 
     fn on_mouse(&mut self, ev: Mouse, area: Rect, _host: &mut Host) -> bool {
-        self.view_h = area.h;
-        if self.last_area != Some(area) {
+        let rows_area = self.rows_area(area);
+        self.view_h = rows_area.h;
+        if self.last_area != Some(rows_area) {
             self.clamp_scroll();
-            self.layout_rects(area);
+            self.layout_rects(rows_area);
         }
         match ev {
             Mouse::Move(p) => {
                 let mut changed = false;
                 if !self.inside {
                     self.inside = true;
-                    let fresh = store::read_kv(FILE);
-                    if fresh != self.map {
-                        self.map = fresh;
-                        changed = true;
+                    if let Ok(fresh) = store::try_read_kv(FILE) {
+                        if fresh != self.map {
+                            self.map = fresh;
+                            changed = true;
+                        }
                     }
                 }
                 let hit = self.hit(p, area);
@@ -235,7 +292,7 @@ impl Page for SettingsPage {
                 }
             }
             Mouse::Wheel(p, delta) => {
-                if !area.contains(p) {
+                if !rows_area.contains(p) {
                     return false;
                 }
                 let before = self.scroll;
@@ -246,5 +303,89 @@ impl Page for SettingsPage {
             }
             Mouse::Up(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_map() -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("mascot".to_string(), "0".to_string()),
+            ("minimal".to_string(), "1".to_string()),
+            (pages::DISABLED_KEY.to_string(), "weather,media".to_string()),
+            ("custom_future_option".to_string(), "keep=exactly|this".to_string()),
+        ])
+    }
+
+    fn page(map: BTreeMap<String, String>) -> SettingsPage {
+        SettingsPage {
+            rows: vec![Row { label: "Appearance", kind: Kind::Appearance }],
+            map,
+            rects: Vec::new(),
+            last_area: None,
+            view_h: theme::BODY.h,
+            scroll: 0.0,
+            hover: None,
+            inside: false,
+            save_error: false,
+        }
+    }
+
+    #[test]
+    fn appearance_cycles_and_changes_no_other_preference() {
+        let base = sample_map();
+        let mut current = base.clone();
+        for expected in ["graphite", "midnight", "original", "graphite"] {
+            current = changed_settings(current, Kind::Appearance);
+            let mut complete_expected = base.clone();
+            complete_expected.insert(theme::PRESET_KEY.to_string(), expected.to_string());
+            assert_eq!(current, complete_expected);
+        }
+    }
+
+    #[test]
+    fn invalid_appearance_uses_original_before_advancing() {
+        let mut initial = sample_map();
+        initial.insert(theme::PRESET_KEY.to_string(), "unknown-theme".to_string());
+        let changed = changed_settings(initial.clone(), Kind::Appearance);
+        initial.insert(theme::PRESET_KEY.to_string(), "graphite".to_string());
+        assert_eq!(changed, initial);
+    }
+
+    #[test]
+    fn toggles_keep_the_current_appearance_and_unrelated_keys() {
+        let mut initial = sample_map();
+        initial.insert(theme::PRESET_KEY.to_string(), "midnight".to_string());
+        let with_weather = changed_settings(initial.clone(), Kind::Feature("weather"));
+        let mut expected = initial;
+        expected.insert(pages::DISABLED_KEY.to_string(), "media".to_string());
+        assert_eq!(with_weather, expected);
+        let with_mascot = changed_settings(with_weather, Kind::Flag { key: "mascot", default_on: true });
+        expected.insert("mascot".to_string(), "1".to_string());
+        assert_eq!(with_mascot, expected);
+    }
+
+    #[test]
+    fn a_failed_save_does_not_apply_the_selection_and_a_retry_can_succeed() {
+        let initial = sample_map();
+        let requested = changed_settings(initial.clone(), Kind::Appearance);
+        let mut settings = page(initial.clone());
+        assert!(!settings.commit_with(requested.clone(), |_| {
+            Err(io::Error::new(io::ErrorKind::PermissionDenied, "synthetic save failure"))
+        }));
+        assert_eq!(settings.map, initial);
+        assert!(settings.save_error);
+        assert!(settings.rows_area(theme::BODY).h < theme::BODY.h);
+
+        let mut written = None;
+        assert!(settings.commit_with(requested.clone(), |map| {
+            written = Some(map.clone());
+            Ok(())
+        }));
+        assert_eq!(written, Some(requested.clone()));
+        assert_eq!(settings.map, requested);
+        assert!(!settings.save_error);
     }
 }

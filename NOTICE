@@ -10,6 +10,8 @@ UTF-16 input, editor focus lifecycle, web-link validation and weather cancellati
 Version 0.1.2 also changes first-run publication, hidden-window rendering,
 explicit panel opening and bounded clipboard paste. Development-only Ponytail
 guidance is under .agents/skills with its separate MIT notices.
+Version 0.1.3 adds shared native appearance presets, persistence feedback and
+fallible settings reloads that preserve the active configuration on read errors.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources
@@ -40,3 +42,5 @@ Third-Party Notices, Assets, and Data Sources
      Licensed under MIT OR Apache-2.0.
    - serde_json (https://github.com/serde-rs/json)
      Licensed under MIT OR Apache-2.0.
+NotchLite 0.1.3: shared native appearance presets and settings persistence feedback.
+Preset palettes and application changes are original additions to this fork.
