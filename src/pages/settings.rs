@@ -99,9 +99,10 @@ pub struct SettingsPage {
 
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 4);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 5);
         rows.push(Row { label: "Appearance", kind: Kind::Appearance });
         rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
+        rows.push(Row { label: "Phone link (LAN)", kind: Kind::Flag { key: pages::PHONE_KEY, default_on: false } });
         for &(id, label) in pages::FEATURES {
             rows.push(Row { label, kind: Kind::Feature(id) });
         }
@@ -402,5 +403,19 @@ mod tests {
         assert_eq!(written, Some(requested.clone()));
         assert_eq!(settings.map, requested);
         assert!(!settings.save_error);
+    }
+
+    #[test]
+    fn phone_is_opt_in_and_other_settings_preserve_that_choice() {
+        let initial = sample_map();
+        let flag = Kind::Flag { key: pages::PHONE_KEY, default_on: false };
+        assert!(!is_row_on(&initial, flag));
+        let enabled = changed_settings(initial.clone(), flag);
+        assert!(is_row_on(&enabled, flag));
+        let other = changed_settings(enabled, Kind::Appearance);
+        assert!(is_row_on(&other, flag));
+        let disabled = changed_settings(other, flag);
+        assert!(!is_row_on(&disabled, flag));
+        assert_eq!(disabled.get("custom_future_option"), initial.get("custom_future_option"));
     }
 }

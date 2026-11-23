@@ -6,17 +6,17 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.5 supera 40 test unitari: vedi [validazione](docs/review/iteration-5/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.6 supera 59 test Rust, inclusi scambi TLS su loopback: vedi [validazione](docs/review/iteration-6/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. [Esito della prima revisione](docs/review/SUMMARY.md).
 
-Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.5 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, navigazione, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
+Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.6 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, navigazione, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
 
 **Aspetto della notch:** quattro preset in Settings > Appearance: Original, Graphite, Midnight e Rose. La nuova barra a icone rende direttamente selezionabili le pagine abilitate; nome della sezione leggibile sotto il contenuto e Ctrl+Tab/Ctrl+Shift+Tab fuori dagli editor. Il riferimento visivo è Noci Share, con implementazione e risorse del nostro fork. [Navigazione e schema offline](docs/MODERN-NAVIGATION.md), [palette](docs/APPEARANCE.md), [revisione](docs/review/iteration-5/REVIEW.md).
 
-**Telefono:** definito il [flusso browser Android e iPhone](docs/PHONE-SHARE.md) per QR e scambio file con accettazione sul PC. Il backend non è implementato: questa versione non associa telefoni, non apre listener e non trasferisce file al cellulare. Occorre risolvere origine autenticata, trasporto e compatibilità browser prima di implementarlo.
+**Telefono (preview 0.1.6):** [QR e scambio file sulla LAN](docs/PHONE-SHARE.md) con [companion Android e iPhone](docs/COMPANION.md), certificato verificato dal QR e consenso sul PC. Settings > Phone link (LAN) è spento anche nei profili esistenti; il server parte soltanto con Start QR pairing. Sessioni temporanee, un file per direzione, massimo 256 MiB. Nessun tunnel o cloud. Bluetooth è un incremento successivo, non ancora attivabile. Restano da provare GUI e telefoni reali; su iPhone serve una build firmata.
 
 **Orologio indipendente:** la 0.1.4 aggiunge Settings > Desktop clock, disattivato di default. Usa una finestra GDI, il timer già presente e i colori del preset. Ora 24 ore e data locale, posizione fissa sul monitor principale; si mostra solo quando il desktop è attivo e lascia passare i clic. Non è ancora un widget ancorato dietro le icone. [Comportamento e limiti](docs/DESKTOP-CLOCK.md), [revisione del modulo](docs/review/iteration-4/REVIEW.md).
 
-La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.5 e l'orologio non sono stati misurati.
+La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.6, il collegamento telefono e l'orologio non sono stati misurati.
 
 **Obiettivo visivo:** personalizzare anche il desktop nel suo insieme. Il primo orologio è un modulo sperimentale da collaudare; barra/dock, sfondo coordinato, vetro e altri widget sono ancora da implementare. Vedi [esperienza desktop completa](docs/DESKTOP-EXPERIENCE.md).
 
@@ -41,7 +41,7 @@ Nella 0.1.2: scrittura iniziale del profilo senza file finali parziali o sovrasc
 
 ## Compilazione
 
-Per usare il pacchetto portatile non serve installare Rust. Per ricompilare: Windows x64 e toolchain Rust MSVC con linker MSVC/Windows SDK, oppure Rust GNU con il linker MinGW necessario. La build preparata nella sessione usa gli installer standalone ufficiali Rust GNU nella cartella di lavoro, con hash verificati. Non è richiesto un browser incorporato per la UI.
+Per usare il pacchetto portatile non serve installare Rust. Per ricompilare: Windows x64, Rust e compilatore C per ring; toolchain MSVC con Windows SDK oppure GNU con MinGW completo. Le toolchain della sessione restano nella cartella di lavoro. Non è richiesto un browser incorporato per la UI. Le licenze delle dipendenze Rust sono in [licenses/rust](licenses/rust/README.md).
 
 ```powershell
 cargo test --locked

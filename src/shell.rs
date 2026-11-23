@@ -145,6 +145,7 @@ struct App {
     waker: Waker,
     minimal: bool,
     disabled: Vec<String>,
+    phone_enabled: bool,
     /// Index of the page whose live activity the collapsed notch shows.
     activity: Option<usize>,
     peeks: VecDeque<Peek>,
@@ -297,13 +298,15 @@ impl App {
             .get(pages::DISABLED_KEY)
             .map(|v| v.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
             .unwrap_or_default();
-        if disabled != self.disabled || self.pages.is_empty() {
+        let phone_enabled = pages::phone_enabled(&settings);
+        if disabled != self.disabled || phone_enabled != self.phone_enabled || self.pages.is_empty() {
             let current_id = self.page_ids.get(self.current).copied();
             self.disabled = disabled;
+            self.phone_enabled = phone_enabled;
             let off = self.disabled.clone();
             let old: Vec<(&'static str, Box<dyn Page>)> = self.page_ids.drain(..).zip(self.pages.drain(..)).collect();
             let (ids, built): (Vec<_>, Vec<_>) =
-                pages::build(self.waker, |id| !off.iter().any(|x| x == id), old).into_iter().unzip();
+                pages::build(self.waker, |id| !off.iter().any(|x| x == id), phone_enabled, old).into_iter().unzip();
             self.page_ids = ids;
             self.pages = built;
             // Stay on the same page if it still exists.
@@ -839,7 +842,7 @@ impl App {
 
     fn on_drag_enter(&mut self) {
         self.dragging = true;
-        if let Some(i) = self.pages.iter().position(|p| p.accepts_files()) {
+        if let Some(i) = self.drop_page() {
             self.go_to(i);
         }
         self.set_expanded(true);
@@ -868,11 +871,20 @@ impl App {
     }
 
     fn on_drop(&mut self, paths: Vec<PathBuf>) {
-        if let Some(i) = self.pages.iter().position(|p| p.accepts_files()) {
+        if let Some(i) = self.drop_page() {
             self.go_to(i);
             self.pages[i].on_drop_files(&paths);
             self.set_expanded(true);
             self.redraw();
+        }
+    }
+
+    /// Respect an explicitly selected receiver before falling back to Shelf.
+    fn drop_page(&self) -> Option<usize> {
+        if self.pages.get(self.current).is_some_and(|page| page.accepts_files()) {
+            Some(self.current)
+        } else {
+            self.pages.iter().position(|page| page.accepts_files())
         }
     }
 
@@ -1379,6 +1391,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             waker,
             minimal: false,
             disabled: Vec::new(),
+            phone_enabled: false,
             activity: None,
             peeks: VecDeque::new(),
             peek: None,

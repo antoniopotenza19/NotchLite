@@ -35,6 +35,8 @@ jobs:
           Copy-Item docs/APPEARANCE.md artifact/NotchLite-portatile/APPEARANCE.md
           Copy-Item docs/DESKTOP-CLOCK.md artifact/NotchLite-portatile/DESKTOP-CLOCK.md
           Copy-Item docs/MODERN-NAVIGATION.md,docs/PHONE-SHARE.md artifact/NotchLite-portatile
+          Copy-Item docs/COMPANION.md artifact/NotchLite-portatile
+          Copy-Item licenses -Recurse artifact/NotchLite-portatile/licenses
           New-Item -ItemType Directory -Force artifact/NotchLite-portatile/assets | Out-Null
           Copy-Item docs/assets/navigation-preview.png artifact/NotchLite-portatile/assets
           Compress-Archive -Path artifact/NotchLite-portatile -DestinationPath artifact/NotchLite-portatile.zip

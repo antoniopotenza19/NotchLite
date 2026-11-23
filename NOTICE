@@ -16,7 +16,12 @@ Version 0.1.4 adds an opt-in native GDI clock window, independent of the notch.
 The clock implementation is an original addition to this fork.
 Version 0.1.5 adds a native icon navigation bar, local keyboard page switching
 and the Rose palette. Noci Share is a visual reference; no Noci code or assets
-are included. The mobile file-sharing backend is not implemented.
+are included. The mobile file-sharing backend was not implemented in 0.1.5.
+Version 0.1.6 adds an opt-in LAN TLS server, temporary QR enrollment, PC consent,
+bounded file streams and original native Android/iPhone companion applications.
+This is an experimental addition, not a port of Noci/NotchPixel code.
+Rust dependency license/notice texts are distributed under licenses/rust;
+mobile dependency notices are under companion. Preserve these with binaries.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources

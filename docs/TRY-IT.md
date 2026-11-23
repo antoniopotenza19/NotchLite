@@ -14,7 +14,7 @@ La 0.1.4 aggiunge **Desktop clock**, spento di default. Quando vorrai collaudarl
 
 Questa build è preparata con test e compilazione da riga di comando. La GUI dei preset e del widget non viene aperta durante la preparazione, per richiesta dell'utente. Resa e interazione richiedono ancora verifica.
 
-Il QR e lo scambio file con Android/iPhone sono ancora un [progetto](PHONE-SHARE.md), non una funzione attiva in questa preview. Non vengono creati listener o collegamenti telefonici.
+La preview 0.1.6 aggiunge **Phone link (LAN)**, inizialmente spento: abilitalo in Settings, apri Telefono, scegli la rete e premi **Start QR pairing**. Usa la [companion Android/iPhone](COMPANION.md) per leggere il QR, confronta i codici e approva sul PC. Per ricevere un file devi accettarlo sul PC; per inviarlo seleziona Telefono e trascina un singolo file. Massimo 256 MiB per file. **Disconnect** termina la sessione. [Protocollo e limiti](PHONE-SHARE.md). Il QR non installa la companion iPhone, che richiede firma Apple. Il Bluetooth non è implementato.
 
 Per uscire, fai clic destro sulla notch o sull'icona nell'area di notifica, quindi scegli **Exit**. Se l'icona è nascosta, apri le icone nascoste accanto all'orologio. Il menu sulla notch è nuovo nella 0.1.2 e resta da collaudare.
 

@@ -9,6 +9,8 @@ mod http;
 mod mascot;
 mod navigation;
 mod pages;
+mod phone;
+mod phone_qr;
 mod profile;
 mod shell;
 mod store;

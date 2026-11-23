@@ -26,20 +26,21 @@
     "rust_tests_executed": true,
     "app_run": false,
     "performance_measured": false,
-    "package_integrity_checked": true,
+    "package_integrity_checked": false,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 40,
+    "rust_tests_passed": 59,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "App validation is CLI-only; browser-only reference research was authorized separately. The preview is an offline diagram, not an app screenshot.",
+    "visual_test_limitation": "CLI-only product checks; no desktop or real phone was used. Loopback TLS tests use synthetic fixtures.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-5/VALIDATION.json",
+    "review_validation": "docs/review/iteration-6/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
-    "phone_pairing_implemented": false
+    "phone_pairing_implemented": true,
+    "phone_pairing_real_device_tested": false
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -103,12 +104,16 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "5430475bff7aa9997b4b21f8f1e95ec3b01e77d98db338fbf01a98f6f51d2372",
-    "bytes": 799744
+    "sha256": "454736eca776f5f2c71495eae8ca02af053c367c70de9e7b1b10831b489deb8b",
+    "bytes": 1737216
   },
   "new_source_files": [
     "src/desktop_clock.rs",
     "src/navigation.rs",
+    "src/pages/phone.rs",
+    "src/phone.rs",
+    "src/phone/wire.rs",
+    "src/phone_qr.rs",
     "src/profile.rs"
   ],
   "review_methods": [
@@ -116,7 +121,7 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.5",
+  "version": "0.1.6",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",

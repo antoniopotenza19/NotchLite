@@ -79,6 +79,7 @@ pub fn glyph(feature_id: &str) -> &'static str {
         "system" => "\u{E770}",        // System
         "claude" => "\u{E8F2}",        // Message
         "notifications" => "\u{E7E7}", // ActionCenter
+        "phone" => "\u{E8EA}",         // CellPhone
         "settings" => "\u{E713}",      // Settings
         _ => "\u{E71D}",               // AllApps
     }
@@ -178,10 +179,10 @@ mod tests {
     }
 
     #[test]
-    fn feature_glyphs_are_static_native_icons_without_a_phone_affordance() {
+    fn feature_glyphs_are_static_native_icons() {
         for feature in [
             "media", "shelf", "todo", "calendar", "focus", "weather",
-            "football", "system", "claude", "notifications", "settings",
+            "football", "system", "claude", "notifications", "phone", "settings",
         ] {
             let icon = glyph(feature);
             assert_eq!(icon.chars().count(), 1);
@@ -189,7 +190,7 @@ mod tests {
         }
         assert_eq!(glyph("media"), "\u{E8D6}");
         assert_eq!(glyph("settings"), "\u{E713}");
-        assert_eq!(glyph("phone"), glyph("unknown-feature"));
+        assert_eq!(glyph("phone"), "\u{E8EA}");
         assert_eq!(glyph(""), glyph("unknown-feature"));
     }
 }

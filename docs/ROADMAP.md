@@ -10,7 +10,7 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 | Timer, attività, calendario | Codice ereditato; calendario spento | Aggiungere promemoria ricorrenti, snooze e persistenza |
 | Meteo, orologio e batterie | Parzialmente ereditato | Provare errori rete e batterie periferiche |
 | Cronologia appunti con schede e pin | Da implementare | Limiti memoria/disco e regole contenuti |
-| Invio file al telefono | Specificato il flusso QR/browser Android+iPhone; backend non implementato | Origine browser e trasporto autenticati, consenso PC e streaming con limiti |
+| Invio file al telefono | 0.1.6: preview QR/LAN TLS con companion Android+iPhone e consenso PC | Collaudo reale, distribuzione firmata iPhone, risorse e rete; Bluetooth successivo |
 | PC Deck e telecomando telefono | Da implementare | Pairing e companion app separata |
 | Barra alternativa con Start, tray e app | Da implementare | Modulo dedicato e ripristino affidabile |
 | FPS, temperature e statistiche in gioco | Solo statistiche CPU/RAM ereditate | Sorgenti dati e prove con giochi diversi |
@@ -26,7 +26,7 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 
 Le fasi comprendono tutte le funzioni sopra; l'ordine serve a mantenere misurabile il costo di ciascuna.
 
-Priorità attuali: [navigazione nativa compatta](MODERN-NAVIGATION.md), [scambio file via browser Android e iPhone](PHONE-SHARE.md), poi completamento del [desktop coordinato](DESKTOP-EXPERIENCE.md). La 0.1.5 implementa la navigazione; il pairing richiede ancora scelta del trasporto e backend. Streaming e telecomando completo restano fasi successive. Le fasi qui sotto organizzano le funzioni e i criteri di verifica, senza rinviare il nuovo requisito telefono fino allo streaming.
+Priorità attuali: [navigazione nativa compatta](MODERN-NAVIGATION.md), [scambio file locale con companion Android e iPhone](PHONE-SHARE.md), poi completamento del [desktop coordinato](DESKTOP-EXPERIENCE.md). La 0.1.6 porta il pairing e i file alla fase di preview; collaudo su telefoni, Bluetooth e telecomando completo restano incrementi distinti.
 
 ## Fase 0 — base e misure
 

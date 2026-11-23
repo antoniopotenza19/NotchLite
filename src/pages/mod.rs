@@ -16,6 +16,7 @@ mod focus;
 mod football;
 mod media;
 mod notifications;
+mod phone;
 mod settings;
 mod shelf;
 mod system;
@@ -173,6 +174,12 @@ pub const FEATURES: &[(&str, &str)] = &[
 
 /// Settings key holding the comma-separated ids of disabled features.
 pub const DISABLED_KEY: &str = "disabled";
+/// Unlike historical features, a new network module requires explicit opt-in.
+pub const PHONE_KEY: &str = "phone";
+
+pub fn phone_enabled(map: &std::collections::BTreeMap<String, String>) -> bool {
+    map.get(PHONE_KEY).is_some_and(|value| value == "1")
+}
 
 /// Builds the pages of every enabled feature (disabled ones are never
 /// constructed, so their workers never start), with Settings last.
@@ -181,6 +188,7 @@ pub const DISABLED_KEY: &str = "disabled";
 pub fn build(
     waker: Waker,
     enabled: impl Fn(&str) -> bool,
+    phone_enabled: bool,
     mut existing: Vec<(&'static str, Box<dyn Page>)>,
 ) -> Vec<(&'static str, Box<dyn Page>)> {
     let mut pages: Vec<(&'static str, Box<dyn Page>)> = Vec::new();
@@ -207,6 +215,10 @@ pub fn build(
             _ => continue,
         }));
     }
+    if phone_enabled {
+        let phone = take("phone").unwrap_or_else(|| Box::new(phone::PhonePage::new()));
+        pages.push(("phone", phone));
+    }
     let settings = take(SETTINGS_ID).unwrap_or_else(|| Box::new(settings::SettingsPage::new(waker)));
     pages.push((SETTINGS_ID, settings));
     pages
@@ -214,3 +226,19 @@ pub fn build(
 
 /// Id of the always-present Settings page.
 pub const SETTINGS_ID: &str = "settings";
+
+#[cfg(test)]
+mod opt_in_tests {
+    use super::*;
+    #[test]
+    fn phone_needs_explicit_opt_in_even_for_legacy_profiles() {
+        let mut map = std::collections::BTreeMap::new();
+        assert!(!phone_enabled(&map));
+        for value in ["0", "true", "yes", " 1", "1 "] {
+            map.insert(PHONE_KEY.to_string(), value.to_string());
+            assert!(!phone_enabled(&map));
+        }
+        map.insert(PHONE_KEY.to_string(), "1".to_string());
+        assert!(phone_enabled(&map));
+    }
+}
