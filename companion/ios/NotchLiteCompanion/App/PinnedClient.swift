@@ -104,6 +104,7 @@ final class PinnedClient: @unchecked Sendable {
         guard value.range(of: "^[A-Za-z0-9_-]{1,128}$", options: .regularExpression) != nil else { throw CompanionError.invalid("ID non valido") }; return value
     }
     private func perform(_ method: String, _ path: String, token: String?, body: Data? = nil, upload: URL? = nil, size: Int64? = nil, download: Int64? = nil, progress: @escaping @Sendable (Int64) -> Void = { _ in }) async throws -> (Data, URL?) {
+        try Task.checkCancellation()
         var parts = URLComponents(); parts.scheme = "https"; parts.host = qr.host; parts.port = qr.port; parts.path = path
         var request = URLRequest(url: parts.url!); request.httpMethod = method
         if let token {

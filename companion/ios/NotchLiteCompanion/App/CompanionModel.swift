@@ -46,7 +46,7 @@ struct FileOffer {
         generation += 1; let run = generation; task?.cancel(); client?.cancel(); busy = true
         task = Task {
             defer { if generation == run { busy = false; task = nil; poll() } }
-            do { try await action() } catch is CancellationError {} catch { if generation == run { message = "Operazione non completata: \(error.localizedDescription)" } }
+            do { try Task.checkCancellation(); guard generation == run else { throw CancellationError() }; try await action() } catch is CancellationError {} catch { if generation == run { message = "Operazione non completata: \(error.localizedDescription)" } }
         }
     }
     func pair() {
@@ -62,6 +62,7 @@ struct FileOffer {
         }
     }
     private func request(_ method: String, _ path: String, body: [String: Any]? = nil, auth: String? = nil) async throws -> [String: Any] {
+        try Task.checkCancellation()
         guard let client else { throw CompanionError.invalid("PC non associato") }
         let run = generation
         let result = try await client.json(method, path, token: auth ?? token, body: body)

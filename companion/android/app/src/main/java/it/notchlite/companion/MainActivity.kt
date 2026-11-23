@@ -83,13 +83,14 @@ class MainActivity : ComponentActivity() {
         val run = ++generation
         job?.cancel(); api?.abort(); busy = true; refresh()
         job = lifecycleScope.launch {
-            try { action() }
+            try { currentCoroutineContext().ensureActive(); if (run != generation) throw CancellationException(); action() }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (run == generation) message.text = "Operazione non completata: ${e.message ?: "errore di connessione"}" }
             finally { if (run == generation) { busy = false; job = null; refresh(); poll() } }
         }
     }
     private suspend fun request(method: String, path: String, bearer: String? = token, body: JSONObject? = null): JSONObject {
+        currentCoroutineContext().ensureActive()
         val run = generation; val current = checkNotNull(api)
         val result = withContext(Dispatchers.IO) { current.json(method, path, bearer, body) }
         currentCoroutineContext().ensureActive(); if (run != generation) throw CancellationException()
@@ -155,9 +156,10 @@ class MainActivity : ComponentActivity() {
             check(incoming.getString("id") == transferId)
             when (incoming.getString("status")) { "accepted" -> break; "pending" -> delay(1500); else -> error("File rifiutato o annullato") }
         }
+        val current = checkNotNull(api); val id = checkNotNull(transferId); val bearer = checkNotNull(token)
         withContext(Dispatchers.IO) {
             contentResolver.openInputStream(uri)?.use { input ->
-                checkNotNull(api).upload(checkNotNull(transferId), checkNotNull(token), info.second, input) { n -> runOnUiThread { if (run == generation) message.text = "Invio: $n / ${info.second} byte" } }
+                current.upload(id, bearer, info.second, input) { n -> runOnUiThread { if (run == generation) message.text = "Invio: $n / ${info.second} byte" } }
             } ?: error("File non leggibile")
         }
         transferId = null; message.text = "File ricevuto dal PC"
@@ -165,10 +167,11 @@ class MainActivity : ComponentActivity() {
     private fun receive(uri: Uri, offer: JSONObject) = work {
         val run = generation
         validateOffer(offer); transferId = offer.getString("id"); var saved = false
+        val current = checkNotNull(api); val id = checkNotNull(transferId); val bearer = checkNotNull(token)
         try {
             withContext(Dispatchers.IO) {
                 contentResolver.openOutputStream(uri, "w")?.use { output ->
-                    checkNotNull(api).download(checkNotNull(transferId), checkNotNull(token), offer.getLong("size"), output) { n -> runOnUiThread { if (run == generation) message.text = "Ricezione: $n / ${offer.getLong("size")} byte" } }
+                    current.download(id, bearer, offer.getLong("size"), output) { n -> runOnUiThread { if (run == generation) message.text = "Ricezione: $n / ${offer.getLong("size")} byte" } }
                 } ?: error("Destinazione non scrivibile")
             }
             saved = true; ackId = transferId; transferId = null

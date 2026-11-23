@@ -46,6 +46,7 @@ class ApiClient(private val qr: PairQr) {
         return c
     }
     suspend fun json(method: String, path: String, bearer: String? = null, body: JSONObject? = null): JSONObject {
+        currentCoroutineContext().ensureActive()
         val c = connection(method, path, bearer)
         try {
             if (body == null && method == "POST") { c.doOutput = true; c.setFixedLengthStreamingMode(0); c.connect(); c.outputStream.close() }
@@ -71,6 +72,7 @@ class ApiClient(private val qr: PairQr) {
         } finally { active.compareAndSet(c, null); c.disconnect() }
     }
     suspend fun upload(id: String, token: String, size: Long, input: InputStream, progress: (Long) -> Unit) {
+        currentCoroutineContext().ensureActive()
         require(size in 0..MAX_FILE)
         val c = connection("PUT", "/v1/incoming/${id(id)}", token)
         try {
@@ -80,6 +82,7 @@ class ApiClient(private val qr: PairQr) {
         } finally { active.compareAndSet(c, null); c.disconnect() }
     }
     suspend fun download(id: String, token: String, size: Long, output: OutputStream, progress: (Long) -> Unit) {
+        currentCoroutineContext().ensureActive()
         require(size in 0..MAX_FILE)
         val c = connection("GET", "/v1/outgoing/${id(id)}", token)
         try {
