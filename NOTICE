@@ -12,6 +12,8 @@ explicit panel opening and bounded clipboard paste. Development-only Ponytail
 guidance is under .agents/skills with its separate MIT notices.
 Version 0.1.3 adds shared native appearance presets, persistence feedback and
 fallible settings reloads that preserve the active configuration on read errors.
+Version 0.1.4 adds an opt-in native GDI clock window, independent of the notch.
+The clock implementation is an original addition to this fork.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources

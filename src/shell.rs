@@ -23,6 +23,7 @@ use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::anim::Spring;
+use crate::desktop_clock;
 use crate::droptarget::{self, DropData, DropHandler};
 use crate::gfx::{Align, DrawCtx, Gfx, Point, Rect, TextStyle, Weight};
 use crate::mascot::Mascot;
@@ -91,6 +92,17 @@ fn read_battery() -> Battery {
         percent: (has_battery && s.BatteryLifePercent <= 100).then_some(s.BatteryLifePercent),
         plugged: s.ACLineStatus == 1,
     }
+}
+
+fn report_clock_error() {
+    worker::peek(Peek {
+        icon: "\u{E7BA}".to_string(),
+        emoji: false,
+        accent: theme::warn(),
+        title: "Desktop clock unavailable".to_string(),
+        body: "The notch is still available. Retry in Settings.".to_string(),
+        seconds: 6.0,
+    });
 }
 
 struct App {
@@ -273,6 +285,9 @@ impl App {
         // Keep the complete active snapshot if the file cannot be read.
         let settings = store::try_read_kv(SETTINGS_FILE)?;
         theme::apply(theme::Preset::from_setting(settings.get(theme::PRESET_KEY).map(String::as_str)));
+        if desktop_clock::sync(desktop_clock::enabled(&settings)).is_err() {
+            report_clock_error();
+        }
         self.mascot_enabled = settings.get("mascot").map_or(true, |v| v != "0");
         self.sync_mascot_timer();
         self.minimal = settings.get("minimal").is_some_and(|v| v == "1");
@@ -805,6 +820,9 @@ impl App {
     fn on_tick(&mut self) {
         self.guard_z_order();
         let st = unsafe { GetLocalTime() };
+        if desktop_clock::tick(&st).is_err() {
+            report_clock_error();
+        }
         let battery = read_battery();
         let mut redraw = st.wMinute != self.minute
             || battery.percent != self.battery.percent
@@ -1145,6 +1163,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // selected while APP is already borrowed by this window procedure.
     // Shutdown must not depend on acquiring that RefCell borrow again.
     if msg == WM_DESTROY {
+        desktop_clock::shutdown();
         unsafe {
             let _ = RevokeDragDrop(hwnd);
         }
@@ -1337,6 +1356,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        desktop_clock::shutdown();
         Ok(())
     }
 }

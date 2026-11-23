@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod anim;
+mod desktop_clock;
 mod droptarget;
 mod gfx;
 mod http;

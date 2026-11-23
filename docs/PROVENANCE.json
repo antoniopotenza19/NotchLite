@@ -28,15 +28,17 @@
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 27,
+    "rust_tests_passed": 34,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "CLI only, as explicitly requested. No GUI app launch, desktop automation or OS appearance changes in this iteration.",
+    "visual_test_limitation": "CLI only. GUI, clock resource lifecycle and desktop behavior not exercised, as requested by the user.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
-    "previous_build_app_run": true,
-    "previous_build_performance_measured": true,
-    "review_validation": "docs/review/iteration-3/VALIDATION.json",
-    "previous_version_performance_report": "docs/PERFORMANCE-0.1.2.md"
+    "previous_build_app_run": false,
+    "previous_build_performance_measured": false,
+    "review_validation": "docs/review/iteration-4/VALIDATION.json",
+    "last_gui_observed_version": "0.1.2",
+    "last_performance_measured_version": "0.1.2",
+    "historical_performance_report": "docs/PERFORMANCE-0.1.2.md"
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -100,10 +102,11 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "cca773850cb1972c3916488b3c1823724c3d6c58aac3009dd1c7b9d89c2e07a3",
-    "bytes": 781824
+    "sha256": "65d5788e86c29a55859e341c124780940cd7c7aa0cfdd0feff59c2d19a3f3861",
+    "bytes": 791040
   },
   "new_source_files": [
+    "src/desktop_clock.rs",
     "src/profile.rs"
   ],
   "review_methods": [
@@ -111,5 +114,5 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.3"
+  "version": "0.1.4"
 }

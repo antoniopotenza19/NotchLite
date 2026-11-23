@@ -15,7 +15,7 @@ Riferimento funzionale: [sito ufficiale NotchPixel](https://notchpixel.com/), co
 | Barra alternativa con Start, tray e app | Da implementare | Modulo dedicato e ripristino affidabile |
 | FPS, temperature e statistiche in gioco | Solo statistiche CPU/RAM ereditate | Sorgenti dati e prove con giochi diversi |
 | Muto microfono e timer chiamata | Da implementare | Integrazione audio Windows |
-| Widget indipendenti sul desktop | Da implementare | Lifecycle e limiti per finestra |
+| Widget indipendenti sul desktop | 0.1.4: orologio opzionale GDI, spento di default, GUI non provata | Verificare lifecycle, costi, DPI e visibilità; poi altri widget e posizionamento |
 | Stato agenti AI | Lettura utilizzo Claude locale ereditata | Stati operativi Codex e altri agenti |
 | Cronologia notifiche | Anteprime ereditate | Provare accessi, archivio e limiti |
 | Chat Twitch/YouTube e stato OBS | Da implementare | API ufficiali e autenticazione |

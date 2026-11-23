@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use crate::desktop_clock;
 use crate::gfx::{Align, DrawCtx, Point, Rect, TextStyle, Weight};
 use crate::pages::{self, Host, Mouse, Page};
 use crate::store;
@@ -98,8 +99,9 @@ pub struct SettingsPage {
 
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 3);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 4);
         rows.push(Row { label: "Appearance", kind: Kind::Appearance });
+        rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
         for &(id, label) in pages::FEATURES {
             rows.push(Row { label, kind: Kind::Feature(id) });
         }
@@ -312,6 +314,7 @@ mod tests {
 
     fn sample_map() -> BTreeMap<String, String> {
         BTreeMap::from([
+            (desktop_clock::SETTING_KEY.to_string(), "0".to_string()),
             ("mascot".to_string(), "0".to_string()),
             ("minimal".to_string(), "1".to_string()),
             (pages::DISABLED_KEY.to_string(), "weather,media".to_string()),
@@ -365,6 +368,18 @@ mod tests {
         let with_mascot = changed_settings(with_weather, Kind::Flag { key: "mascot", default_on: true });
         expected.insert("mascot".to_string(), "1".to_string());
         assert_eq!(with_mascot, expected);
+    }
+
+    #[test]
+    fn toggling_the_desktop_clock_keeps_the_preset_and_disabled_features() {
+        let mut initial = sample_map();
+        initial.insert(theme::PRESET_KEY.to_string(), "midnight".to_string());
+        let flag = Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false };
+        let enabled = changed_settings(initial.clone(), flag);
+        let mut expected = initial.clone();
+        expected.insert(desktop_clock::SETTING_KEY.to_string(), "1".to_string());
+        assert_eq!(enabled, expected);
+        assert_eq!(changed_settings(enabled, flag), initial);
     }
 
     #[test]
