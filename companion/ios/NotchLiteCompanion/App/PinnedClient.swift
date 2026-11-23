@@ -13,7 +13,14 @@ private final class CancellationHandle: @unchecked Sendable {
     private let lock = NSLock()
     private var operation: Transport?
     private var cancelled = false
-    func install(_ value: Transport) { lock.lock(); operation = value; let stop = cancelled; lock.unlock(); if stop { value.cancel() } }
+    func installAndStart(_ value: Transport, request: URLRequest, upload: URL?) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard !cancelled else { return false }
+        operation = value
+        // Task creation/resume must finish before cancellation may invalidate this session.
+        value.start(request, upload: upload)
+        return true
+    }
     func cancel() { lock.lock(); cancelled = true; let value = operation; lock.unlock(); value?.cancel() }
 }
 
@@ -121,7 +128,10 @@ final class PinnedClient: @unchecked Sendable {
         let result: (Data, URL?) = try await withTaskCancellationHandler(operation: {
             try await withCheckedThrowingContinuation { continuation in
                 let transport = Transport(qr: qr, expected: download, progress: progress) { continuation.resume(with: $0) }
-                transport.start(request, upload: upload); handle.install(transport)
+                if !handle.installAndStart(transport, request: request, upload: upload) {
+                    // No task was created, so no task delegate can complete this continuation.
+                    transport.cancel(); continuation.resume(throwing: CancellationError())
+                }
             }
         }, onCancel: { handle.cancel() })
         do { try Task.checkCancellation() } catch { if let url = result.1 { try? FileManager.default.removeItem(at: url) }; throw error }
