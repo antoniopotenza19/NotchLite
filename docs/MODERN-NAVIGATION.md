@@ -22,4 +22,4 @@ Questo incremento non aggiunge dipendenze, worker, listener o nuove superfici gr
 
 I test controllano capacità, limiti, hit test, spazi tra pulsanti, combinazioni di tasti, fallback e contrasto delle quattro palette. La prova GUI, DPI reali, mouse/tastiera e nuova misura RAM restano escluse per il vincolo dell'utente.
 
-Il [collegamento al telefono](PHONE-SHARE.md) è una specifica separata. Non vengono mostrati un QR fittizio o un telefono connesso senza un provider funzionante.
+Nella successiva 0.1.6 il [collegamento al telefono](PHONE-SHARE.md) aggiunge una dodicesima pagina opzionale, un provider LAN e una finestra QR GDI. Le affermazioni di assenza di nuove dipendenze in questo documento riguardano soltanto l'incremento di navigazione 0.1.5. Il QR viene generato da un server reale avviato esplicitamente; il consenso della sessione è distinto dalla presenza fisica del telefono online.

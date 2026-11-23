@@ -44,7 +44,8 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28, 42, 28, 28); setBackgroundColor(Color.rgb(24, 29, 38)) }
+        val padding = (24 * resources.displayMetrics.density).toInt()
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(padding, padding, padding, padding); setBackgroundColor(Color.rgb(24, 29, 38)) }
         fun label(text: String, size: Float = 16f): TextView = TextView(this).apply { this.text = text; textSize = size; setTextColor(Color.rgb(244, 247, 252)); setPadding(0, 12, 0, 12); column.addView(this) }
         fun button(text: String, action: () -> Unit): Button = Button(this).apply { this.text = text; setOnClickListener { action() }; column.addView(this) }
         label("NotchLite Companion", 26f)
@@ -64,7 +65,14 @@ class MainActivity : ComponentActivity() {
             val notices = assets.open("NOTICE.txt").bufferedReader().use { it.readText() }
             AlertDialog.Builder(this).setTitle("Licenze").setMessage(notices).setPositiveButton("Chiudi", null).show()
         }
-        setContentView(ScrollView(this).apply { addView(column) }); refresh()
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(Color.rgb(24, 29, 38)); addView(column)
+            setOnApplyWindowInsetsListener { view, insets ->
+                @Suppress("DEPRECATION")
+                view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
+                insets
+            }
+        }); refresh()
     }
     override fun onStart() { super.onStart(); foreground = true; poll() }
     override fun onStop() {
@@ -102,7 +110,7 @@ class MainActivity : ComponentActivity() {
         work {
             val response = request("POST", "/v1/pair", null, JSONObject().put("secret", qr.secret).put("name", "Android"))
             pairId = checkNotNull(api).id(response.getString("id")); pollToken = response.getString("pollToken")
-            val code = response.getString("code").take(32)
+            val code = response.getString("code"); require(code.matches(Regex("[0-9]{6}"))) { "Codice di confronto non valido" }
             message.text = "Codice: $code\nConfrontalo sul PC e approva solo se coincide."
             busy = false; refresh(); pollLoop()
         }

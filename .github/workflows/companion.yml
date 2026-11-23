@@ -50,8 +50,10 @@ jobs:
         run: swift test --package-path companion/ios
       - name: Compile unsigned iPhone simulator app
         run: xcodebuild -project companion/ios/NotchLiteCompanion.xcodeproj -scheme NotchLiteCompanion -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath companion/ios/build CODE_SIGNING_ALLOWED=NO build
+      - name: Preserve simulator bundle permissions
+        run: tar -czf companion/ios/NotchLiteCompanion-simulator.tar.gz -C companion/ios/build/Build/Products/Debug-iphonesimulator NotchLiteCompanion.app
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: NotchLite-Companion-iOS-simulator-unsigned
-          path: companion/ios/build/Build/Products/Debug-iphonesimulator/NotchLiteCompanion.app/
+          path: companion/ios/NotchLiteCompanion-simulator.tar.gz
           if-no-files-found: error

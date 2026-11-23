@@ -55,7 +55,7 @@ struct FileOffer {
         disconnect(); client = PinnedClient(qr)
         work { [self] in
             let result = try await request("POST", "/v1/pair", body: ["secret": qr.secret, "name": "iPhone"], auth: nil)
-            guard let id = result["id"] as? String, let poll = result["pollToken"] as? String, let code = result["code"] as? String, code.count <= 32 else { throw CompanionError.invalid("Associazione non valida") }
+            guard let id = result["id"] as? String, let poll = result["pollToken"] as? String, let code = result["code"] as? String, code.range(of: "^[0-9]{6}$", options: .regularExpression) != nil else { throw CompanionError.invalid("Associazione non valida") }
             pairID = try PinnedClient.id(id); pollToken = poll
             message = "Codice: \(code)\nConfrontalo sul PC e approva solo se coincide."
             busy = false; try await pollLoop()

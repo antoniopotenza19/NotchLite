@@ -40,6 +40,7 @@ val dependencyNotices = tasks.register("dependencyNotices") {
     }
 }
 tasks.named("preBuild").configure { dependsOn(dependencyNotices) }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach { dependsOn(dependencyNotices) }
 dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

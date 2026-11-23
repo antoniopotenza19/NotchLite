@@ -66,7 +66,8 @@ Apple del tuo account. Questa anteprima non contiene un profilo di firma o
 una distribuzione TestFlight/App Store.
 
 Il job CI macOS compila senza firma per **iOS Simulator** e pubblica
-`NotchLite-Companion-iOS-simulator-unsigned`. Questo `.app` non è un IPA
+`NotchLite-Companion-iOS-simulator-unsigned`, con bundle `.app` in un archivio
+tar.gz che conserva permessi e collegamenti. Questo `.app` non è un IPA
 installabile su iPhone. Una compilazione del simulatore non verifica la
 fotocamera o il trasferimento sulla LAN di un dispositivo fisico.
 
@@ -91,8 +92,10 @@ inviare il segreto. Sono mantenuti controllo di validità e identità IP del
 certificato; il certificato del PC deve includere l'indirizzo LAN nei SAN.
 Android usa un SSLContext per istanza senza modificare trust manager o
 hostname verifier globali. iOS ancora la singola valutazione TLS al leaf
-pinned, applica la policy SSL per quell'host e disabilita fetch di rete per
-la valutazione del certificato. Le app rifiutano redirect HTTP.
+pinned, invoca la valutazione TLS della piattaforma con policy SSL per
+quell'host e disabilita fetch di rete per la valutazione del certificato.
+Le app rifiutano redirect HTTP. Pin errato, date e identità IP devono
+essere verificati anche contro i runtime reali, oltre alla revisione sorgente.
 
 Le risposte JSON sono limitate a 64 KiB. Upload e download sono stream su
 disco, con dimensione nota e limite 256 MiB; un download con Content-Length
