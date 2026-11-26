@@ -1,6 +1,6 @@
 {
   "project": "NotchLite",
-  "prepared_date": "2026-11-23",
+  "prepared_date": "2026-11-26",
   "upstream": {
     "repository": "https://github.com/Yemresalcan/ada-notch",
     "revision": "5a1e17f040672a71685872b1b234e01d02a47bb5",
@@ -24,24 +24,28 @@
   "validation": {
     "compiled": true,
     "rust_tests_executed": true,
-    "app_run": false,
+    "app_run": true,
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 59,
+    "rust_tests_passed": 107,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "CLI-only product checks; no desktop or real phone was used. Loopback TLS tests use synthetic fixtures.",
+    "visual_test_limitation": "Headless real shared-server test only; native GUI not opened. Existing embedded Desktop conversations remain separate.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-6/VALIDATION.json",
+    "review_validation": "docs/review/iteration-8/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
     "phone_pairing_implemented": true,
     "phone_pairing_real_device_tested": false,
-    "cross_platform_ci": "docs/review/iteration-6/CI.json"
+    "cross_platform_ci": null,
+    "codex_gui_chats_connected": false,
+    "audio_ai_enabled": false,
+    "cli_diagnostic_run": true,
+    "codex_live_daemon_tested": true
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -105,10 +109,21 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "454736eca776f5f2c71495eae8ca02af053c367c70de9e7b1b10831b489deb8b",
-    "bytes": 1737216
+    "sha256": "139df501535225d6e193924272a697902d1e47b288520e3458d3d010a0511a53",
+    "bytes": 2217984
   },
   "new_source_files": [
+    "src/assist.rs",
+    "src/assist_layout.rs",
+    "src/assist_metrics.rs",
+    "src/assist_overlay.rs",
+    "src/call_audio.rs",
+    "src/call_audio/windows.rs",
+    "src/codex_bridge.rs",
+    "src/codex_bridge/protocol.rs",
+    "src/codex_bridge/transport.rs",
+    "src/codex_diagnostic.rs",
+    "src/codex_server.rs",
     "src/desktop_clock.rs",
     "src/navigation.rs",
     "src/pages/phone.rs",
@@ -122,12 +137,18 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.6",
+  "version": "0.1.7",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",
     "code_reused": false,
     "assets_reused": false,
     "original_repository": null
+  },
+  "external_codex_runtime": {
+    "version": "0.171.0-alpha.13.2",
+    "asset": "codex-package-x86_64-pc-windows-msvc.tar.gz",
+    "sha256": "6d3be3ea2e3f759f77f23b543ee882aae6433dc6a6cd260788c2e8793d616eac",
+    "redistributed": false
   }
 }

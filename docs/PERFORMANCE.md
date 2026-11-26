@@ -1,6 +1,6 @@
 # Consumi e prove
 
-La build 0.1.6 e l'orologio non sono stati avviati né misurati: le verifiche del prodotto sono limitate alla riga di comando per richiesta dell'utente. Le ultime misure restano quelle della 0.1.2 in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio era 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non era raggiunto in tutti gli scenari. Non attribuire questi valori alla 0.1.6, all'orologio acceso o al backend telefono.
+La GUI 0.1.7 e l'orologio non sono stati avviati né misurati: il collegamento al daemon Codex è stato provato in modalità headless. Il daemon è un processo separato e aggiunge un costo RAM proprio; non è incluso nelle misure storiche della notch. Le ultime misure restano quelle della 0.1.2 in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio era 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non era raggiunto in tutti gli scenari. Non attribuire questi valori alla 0.1.7, all'orologio acceso o al backend telefono.
 
 I valori nella tabella seguente sono budget iniziali, non risultati misurati. Il campione della prima build in benchmarks/base-idle.json e BUILD-VALIDATION.md resta storico.
 
@@ -29,4 +29,4 @@ Per la latenza usare tracce ETW o una ripresa con timestamp: un controllo del fi
 
 ## Verifiche non ancora eseguite
 
-Accessibilità, DPI/multi-monitor, rete dei moduli opzionali, fullscreen reale, uso prolungato, memoria GPU, orologio e latenza. I risultati CLI correnti sono nel [report di validazione](review/iteration-6/VALIDATION.json). Apertura e navigazione erano state osservate nella 0.1.2; la GUI della 0.1.6 non è stata avviata. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.
+Accessibilità, DPI/multi-monitor, rete dei moduli opzionali, fullscreen reale, uso prolungato, memoria GPU, orologio e latenza. I risultati CLI correnti sono nel [report di validazione](review/iteration-8/VALIDATION.json). Apertura e navigazione erano state osservate nella 0.1.2; la GUI della 0.1.7 non è stata avviata. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.

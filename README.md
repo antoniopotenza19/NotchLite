@@ -6,9 +6,13 @@ Obiettivo: realizzare gradualmente una notch Windows semplice e leggera, prenden
 
 ## Stato reale
 
-È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La versione 0.1.6 supera 59 test Rust, inclusi scambi TLS su loopback: vedi [validazione](docs/review/iteration-6/VALIDATION.json). Il pacchetto portatile contiene notchlite.exe, istruzioni e licenze. Anche APK Android e build iOS Simulator unsigned compilano: tre test parser per piattaforma, [esiti CI](docs/review/iteration-6/CI.json). [Esito della prima revisione](docs/review/SUMMARY.md).
+È disponibile una build portatile sperimentale per Windows x64 GNU, compilata in release con Rust 1.100.0. La 0.1.7 aggiunge pannelli opzionali sul secondo monitor: [dashboard Codex](docs/CODEX-DASHBOARD.md) in alto a sinistra e [pannello call senza audio](docs/CALL-ASSISTANT.md) in alto a destra. La suite conta 107 test passati; esiti e limiti sono nel [record dell'iterazione](docs/review/iteration-8/VALIDATION.json). Il pacchetto contiene eseguibile, istruzioni e licenze. Le companion telefono della 0.1.6 restano utilizzabili: [build precedenti](docs/review/iteration-6/CI.json).
 
-Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.6 è stata verificata soltanto da riga di comando: nessuna apertura dell'app o modifica al desktop. Resa dei preset e dell'orologio, navigazione, incolla, uscita dal menu, DPI e flussi completi restano da collaudare.
+**Collegamento alle chat:** verificato su un server Codex locale condiviso con accesso ChatGPT: due client hanno osservato la stessa chat, risposta, completamento e token. Nel pannello, **Nuova chat** crea una sessione in sola lettura nella cartella scelta; **Send** invia esplicitamente il messaggio. **Avvia server locale** richiama il gestore ufficiale, senza fermarlo quando il pannello si chiude. [Preparazione del server](docs/CODEX-SHARED-SERVER.md). Le chat già aperte nel server incorporato di Codex Desktop **restano separate**: non sono migrate o controllate da questo collegamento.
+
+**Call:** su scelta dell'utente usiamo soltanto l'abbonamento esistente. Il pannello rileva possibili comunicazioni tramite metadati Windows; ascolto, registrazione, trascrizione e suggerimenti AI sono disattivati. Non vengono configurate API a consumo, lette credenziali o inviati audio.
+
+Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l'app riapre l'istanza esistente. Escape torna alla capsula. L'avvio automatico usa --background. Apertura e navigazione sono state osservate nella 0.1.2. La 0.1.7 ha verifiche CLI, test sintetici e una conversazione reale sul daemon condiviso con due client; nessuna finestra dell'app aperta o automazione del desktop. Resa dei nuovi pannelli, focus, DPI e hotplug restano da collaudare.
 
 **Aspetto della notch:** quattro preset in Settings > Appearance: Original, Graphite, Midnight e Rose. La nuova barra a icone rende direttamente selezionabili le pagine abilitate; nome della sezione leggibile sotto il contenuto e Ctrl+Tab/Ctrl+Shift+Tab fuori dagli editor. Il riferimento visivo è Noci Share, con implementazione e risorse del nostro fork. [Navigazione e schema offline](docs/MODERN-NAVIGATION.md), [palette](docs/APPEARANCE.md), [revisione](docs/review/iteration-5/REVIEW.md).
 
@@ -16,7 +20,7 @@ Il doppio clic apre il pannello, visibile anche in taskbar/Alt-Tab; rilanciare l
 
 **Orologio indipendente:** la 0.1.4 aggiunge Settings > Desktop clock, disattivato di default. Usa una finestra GDI, il timer già presente e i colori del preset. Ora 24 ore e data locale, posizione fissa sul monitor principale; si mostra solo quando il desktop è attivo e lascia passare i clic. Non è ancora un widget ancorato dietro le icone. [Comportamento e limiti](docs/DESKTOP-CLOCK.md), [revisione del modulo](docs/review/iteration-4/REVIEW.md).
 
-La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica: 43,6 MiB residenti medi in background e 42,8 MiB con il pannello aperto, nel profilo base inattivo, memoria GPU esclusa. La 0.1.6, il collegamento telefono e l'orologio non sono stati misurati.
+La [misura RAM della 0.1.2](docs/PERFORMANCE-0.1.2.md) resta storica. La 0.1.7 e i suoi pannelli non sono stati misurati in esecuzione grafica. I contatori della nuova dashboard campionano i processi quando viene abilitata: non rappresentano un benchmark già eseguito o un'attribuzione RAM a ciascuna chat.
 
 **Obiettivo visivo:** personalizzare anche il desktop nel suo insieme. Il primo orologio è un modulo sperimentale da collaudare; barra/dock, sfondo coordinato, vetro e altri widget sono ancora da implementare. Vedi [esperienza desktop completa](docs/DESKTOP-EXPERIENCE.md).
 

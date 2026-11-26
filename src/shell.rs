@@ -146,6 +146,7 @@ struct App {
     minimal: bool,
     disabled: Vec<String>,
     phone_enabled: bool,
+    assistant: crate::assist::Assistant,
     /// Index of the page whose live activity the collapsed notch shows.
     activity: Option<usize>,
     peeks: VecDeque<Peek>,
@@ -288,6 +289,10 @@ impl App {
         // Keep the complete active snapshot if the file cannot be read.
         let settings = store::try_read_kv(SETTINGS_FILE)?;
         theme::apply(theme::Preset::from_setting(settings.get(theme::PRESET_KEY).map(String::as_str)));
+        if let Err(error) = self.assistant.sync(&settings, self.hwnd) {
+            worker::peek(Peek { icon: "\u{E946}".into(), emoji: false, accent: theme::warn(),
+                title: "Assistant panels".into(), body: error, seconds: 5.0 });
+        }
         if desktop_clock::sync(desktop_clock::enabled(&settings)).is_err() {
             report_clock_error();
         }
@@ -889,6 +894,7 @@ impl App {
     }
 
     fn on_tick(&mut self) {
+        self.assistant.tick();
         self.guard_z_order();
         let st = unsafe { GetLocalTime() };
         if desktop_clock::tick(&st).is_err() {
@@ -910,6 +916,7 @@ impl App {
     }
 
     fn on_wake(&mut self) {
+        self.assistant.actions();
         let mut redraw = false;
         for page in &mut self.pages {
             redraw |= page.poll();
@@ -1244,6 +1251,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // selected while APP is already borrowed by this window procedure.
     // Shutdown must not depend on acquiring that RefCell borrow again.
     if msg == WM_DESTROY {
+        crate::assist_overlay::shutdown_all();
         desktop_clock::shutdown();
         unsafe {
             let _ = RevokeDragDrop(hwnd);
@@ -1293,6 +1301,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             WM_APP_CMD => app.on_commands(),
             WM_APP_WAKE => app.on_wake(),
             WM_APP_OPEN => app.open_panel(),
+            WM_DISPLAYCHANGE | WM_SETTINGCHANGE => app.assistant.display_changed(),
             WM_APP_TRAY => {
                 let event = (lparam.0 & 0xFFFF) as u32;
                 if event == WM_RBUTTONUP || event == WM_CONTEXTMENU {
@@ -1392,6 +1401,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             minimal: false,
             disabled: Vec::new(),
             phone_enabled: false,
+            assistant: crate::assist::Assistant::new(),
             activity: None,
             peeks: VecDeque::new(),
             peek: None,
@@ -1436,10 +1446,15 @@ pub fn run(open_panel: bool) -> Result<()> {
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            if crate::assist_overlay::translate_message(&msg) { continue; }
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
         desktop_clock::shutdown();
+        crate::assist_overlay::shutdown_all();
+        // Release owned proxy/metadata workers outside an APP RefCell borrow.
+        let removed = APP.with(|cell| cell.borrow_mut().take());
+        drop(removed);
         Ok(())
     }
 }

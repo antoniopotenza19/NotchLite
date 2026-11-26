@@ -22,6 +22,10 @@ bounded file streams and original native Android/iPhone companion applications.
 This is an experimental addition, not a port of Noci/NotchPixel code.
 Rust dependency license/notice texts are distributed under licenses/rust;
 mobile dependency notices are under companion. Preserve these with binaries.
+Version 0.1.7 adds opt-in secondary-monitor GDI panels, a local Codex daemon
+client, process metrics and a metadata-only Windows communications detector.
+Audio capture and AI call processing remain disabled in subscription-only mode.
+The current embedded Codex Desktop runtime is not connected by this bridge.
 
 ========================================================================
 Third-Party Notices, Assets, and Data Sources

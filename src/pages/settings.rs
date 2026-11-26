@@ -34,6 +34,7 @@ static LAST_SCROLL: AtomicU32 = AtomicU32::new(0);
 #[derive(Clone, Copy)]
 enum Kind {
     Appearance,
+    AssistantMonitor,
     Feature(&'static str),
     Flag { key: &'static str, default_on: bool },
 }
@@ -45,7 +46,7 @@ struct Row {
 
 fn is_row_on(map: &BTreeMap<String, String>, kind: Kind) -> bool {
     match kind {
-        Kind::Appearance => false,
+        Kind::Appearance | Kind::AssistantMonitor => false,
         Kind::Feature(id) => !map
             .get(pages::DISABLED_KEY)
             .is_some_and(|v| v.split(',').any(|x| x.trim() == id)),
@@ -61,6 +62,7 @@ fn changed_settings(mut map: BTreeMap<String, String>, kind: Kind) -> BTreeMap<S
             let next = theme::Preset::from_setting(map.get(theme::PRESET_KEY).map(String::as_str)).next();
             map.insert(theme::PRESET_KEY.to_string(), next.id().to_string());
         }
+        Kind::AssistantMonitor => {}, // monitor enumeration belongs to the explicit click only
         Kind::Feature(id) => {
             let mut disabled: Vec<String> = map
                 .get(pages::DISABLED_KEY)
@@ -97,12 +99,27 @@ pub struct SettingsPage {
     save_error: bool,
 }
 
+fn select_next_monitor(mut map: BTreeMap<String, String>, devices: &[String]) -> BTreeMap<String, String> {
+    let current = map.get(crate::assist::MONITOR_KEY).map(String::as_str).unwrap_or("auto");
+    let next = if current == "auto" || current.is_empty() {
+        devices.first().map(String::as_str).unwrap_or("auto")
+    } else {
+        devices.iter().position(|device| device == current).and_then(|i| devices.get(i + 1))
+            .map(String::as_str).unwrap_or("auto")
+    }.to_string();
+    map.insert(crate::assist::MONITOR_KEY.into(), next);
+    map
+}
+
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 5);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 8);
         rows.push(Row { label: "Appearance", kind: Kind::Appearance });
         rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
         rows.push(Row { label: "Phone link (LAN)", kind: Kind::Flag { key: pages::PHONE_KEY, default_on: false } });
+        rows.push(Row { label: "Codex dashboard", kind: Kind::Flag { key: crate::assist::DASHBOARD_KEY, default_on: false } });
+        rows.push(Row { label: "Call panel (no audio)", kind: Kind::Flag { key: crate::assist::CALL_KEY, default_on: false } });
+        rows.push(Row { label: "Assistant monitor", kind: Kind::AssistantMonitor });
         for &(id, label) in pages::FEATURES {
             rows.push(Row { label, kind: Kind::Feature(id) });
         }
@@ -174,7 +191,13 @@ impl SettingsPage {
                 return;
             }
         };
-        let map = changed_settings(fresh, row.kind);
+        let map = if matches!(row.kind, Kind::AssistantMonitor) {
+            let devices = match crate::assist_overlay::secondary_devices() {
+                Ok(devices) => devices,
+                Err(_) => { self.save_error = true; return; }
+            };
+            select_next_monitor(fresh, &devices)
+        } else { changed_settings(fresh, row.kind) };
         if self.commit_with(map, |map| store::write_kv(FILE, map)) {
             worker::send(ShellCmd::ReloadSettings);
         }
@@ -219,14 +242,19 @@ impl Page for SettingsPage {
             if self.hover == Some(i) {
                 ctx.fill_rect(r, ROW_RADIUS, theme::card());
             }
-            if matches!(row.kind, Kind::Appearance) {
+            if matches!(row.kind, Kind::Appearance | Kind::AssistantMonitor) {
                 let arrow = Rect::new(r.right() - PAD_X - PRESET_ARROW_W, r.y, PRESET_ARROW_W, ROW_H);
                 let value = Rect::new(arrow.x - 4.0 - PRESET_VALUE_W, r.y, PRESET_VALUE_W, ROW_H);
                 let label = Rect::new(r.x + PAD_X, r.y, (value.x - 4.0 - r.x - PAD_X).max(0.0), ROW_H);
-                let preset = theme::Preset::from_setting(self.map.get(theme::PRESET_KEY).map(String::as_str));
+                let selected = if matches!(row.kind, Kind::Appearance) {
+                    theme::Preset::from_setting(self.map.get(theme::PRESET_KEY).map(String::as_str)).label().to_string()
+                } else {
+                    self.map.get(crate::assist::MONITOR_KEY).filter(|v| !v.is_empty() && *v != "auto")
+                        .map(|v| v.trim_start_matches("\\\\.\\").to_string()).unwrap_or_else(|| "Auto".into())
+                };
                 ctx.stroke_rect(r, ROW_RADIUS, theme::border(), 1.0, false);
                 ctx.text(row.label, label, TextStyle::new(11.5, Weight::Regular, theme::text_dim()));
-                ctx.text(preset.label(), value, TextStyle::new(11.5, Weight::Semibold, theme::text()).align(Align::Right));
+                ctx.text(&selected, value, TextStyle::new(11.5, Weight::Semibold, theme::text()).align(Align::Right));
                 ctx.text("\u{203A}", arrow, TextStyle::new(14.0, Weight::Medium, theme::text_dim()).align(Align::Center));
                 continue;
             }
@@ -417,5 +445,19 @@ mod tests {
         let disabled = changed_settings(other, flag);
         assert!(!is_row_on(&disabled, flag));
         assert_eq!(disabled.get("custom_future_option"), initial.get("custom_future_option"));
+    }
+
+    #[test]
+    fn assistant_monitor_cycles_only_the_supplied_secondary_devices() {
+        let initial = sample_map();
+        let devices = vec!["DISPLAY2".to_string(), "DISPLAY3".to_string()];
+        let one = select_next_monitor(initial.clone(), &devices);
+        assert_eq!(one.get(crate::assist::MONITOR_KEY).unwrap(), "DISPLAY2");
+        let two = select_next_monitor(one, &devices);
+        assert_eq!(two.get(crate::assist::MONITOR_KEY).unwrap(), "DISPLAY3");
+        let auto = select_next_monitor(two, &devices);
+        assert_eq!(auto.get(crate::assist::MONITOR_KEY).unwrap(), "auto");
+        assert_eq!(auto.get("custom_future_option"), initial.get("custom_future_option"));
+        assert_eq!(select_next_monitor(auto, &[]).get(crate::assist::MONITOR_KEY).unwrap(), "auto");
     }
 }
