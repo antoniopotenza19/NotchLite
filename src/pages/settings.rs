@@ -86,6 +86,12 @@ fn changed_settings(mut map: BTreeMap<String, String>, kind: Kind) -> BTreeMap<S
     map
 }
 
+fn changed_privacy_setting(mut fresh: BTreeMap<String,String>, key: &str, policy: crate::window_policy::Policy) -> BTreeMap<String,String> {
+    let active=if key==crate::window_policy::TRAY_ONLY_KEY { policy.tray_only } else { policy.exclude_capture };
+    fresh.insert(key.into(),if active { "0" } else { "1" }.into());
+    fresh
+}
+
 pub struct SettingsPage {
     rows: Vec<Row>,
     map: BTreeMap<String, String>,
@@ -113,8 +119,10 @@ fn select_next_monitor(mut map: BTreeMap<String, String>, devices: &[String]) ->
 
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 8);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 10);
         rows.push(Row { label: "Appearance", kind: Kind::Appearance });
+        rows.push(Row { label: "Tray only", kind: Kind::Flag { key: crate::window_policy::TRAY_ONLY_KEY, default_on: true } });
+        rows.push(Row { label: "Exclude from capture", kind: Kind::Flag { key: crate::window_policy::EXCLUDE_CAPTURE_KEY, default_on: true } });
         rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
         rows.push(Row { label: "Phone link (LAN)", kind: Kind::Flag { key: pages::PHONE_KEY, default_on: false } });
         rows.push(Row { label: "Codex dashboard", kind: Kind::Flag { key: crate::assist::DASHBOARD_KEY, default_on: false } });
@@ -143,7 +151,7 @@ impl SettingsPage {
     }
 
     fn rows_area(&self, area: Rect) -> Rect {
-        Rect { h: (area.h - if self.save_error { ERROR_H } else { 0.0 }).max(0.0), ..area }
+        Rect { h: (area.h - ERROR_H).max(0.0), ..area }
     }
 
     fn max_scroll(&self) -> f32 {
@@ -197,6 +205,8 @@ impl SettingsPage {
                 Err(_) => { self.save_error = true; return; }
             };
             select_next_monitor(fresh, &devices)
+        } else if let Kind::Flag { key: key @ (crate::window_policy::TRAY_ONLY_KEY | crate::window_policy::EXCLUDE_CAPTURE_KEY), .. } = row.kind {
+            changed_privacy_setting(fresh,key,crate::window_policy::current())
         } else { changed_settings(fresh, row.kind) };
         if self.commit_with(map, |map| store::write_kv(FILE, map)) {
             worker::send(ShellCmd::ReloadSettings);
@@ -258,7 +268,11 @@ impl Page for SettingsPage {
                 ctx.text("\u{203A}", arrow, TextStyle::new(14.0, Weight::Medium, theme::text_dim()).align(Align::Center));
                 continue;
             }
-            let on = is_row_on(&self.map, row.kind);
+            let on = match row.kind {
+                Kind::Flag { key: crate::window_policy::TRAY_ONLY_KEY, .. } => crate::window_policy::current().tray_only,
+                Kind::Flag { key: crate::window_policy::EXCLUDE_CAPTURE_KEY, .. } => crate::window_policy::current().exclude_capture,
+                _ => is_row_on(&self.map,row.kind),
+            };
             let track = Rect::new(
                 r.right() - PAD_X - SWITCH_W,
                 r.y + (ROW_H - SWITCH_H) / 2.0,
@@ -278,6 +292,10 @@ impl Page for SettingsPage {
         if self.save_error {
             let error_area = Rect::new(area.x, rows_area.bottom(), area.w, (area.bottom() - rows_area.bottom()).max(0.0));
             ctx.text("Could not save settings. Try again.", error_area, TextStyle::new(10.5, Weight::Medium, theme::danger()));
+        } else {
+            let status_area=Rect::new(area.x,rows_area.bottom(),area.w,(area.bottom()-rows_area.bottom()).max(0.0));
+            ctx.text(&crate::window_policy::status_text(),status_area,TextStyle::new(10.5,Weight::Medium,
+                if crate::window_policy::has_failures() { theme::danger() } else { theme::text_dim() }));
         }
     }
 
@@ -459,5 +477,15 @@ mod tests {
         assert_eq!(auto.get(crate::assist::MONITOR_KEY).unwrap(), "auto");
         assert_eq!(auto.get("custom_future_option"), initial.get("custom_future_option"));
         assert_eq!(select_next_monitor(auto, &[]).get(crate::assist::MONITOR_KEY).unwrap(), "auto");
+    }
+    #[test]
+    fn privacy_toggle_uses_the_visible_state_and_preserves_fresh_external_edits() {
+        let mut fresh=sample_map();
+        fresh.insert(crate::window_policy::EXCLUDE_CAPTURE_KEY.into(),"1".into());
+        fresh.insert("external_change".into(),"keep".into());
+        let result=changed_privacy_setting(fresh,crate::window_policy::EXCLUDE_CAPTURE_KEY,
+            crate::window_policy::Policy{tray_only:true,exclude_capture:false});
+        assert_eq!(result.get(crate::window_policy::EXCLUDE_CAPTURE_KEY).unwrap(),"1");
+        assert_eq!(result.get("external_change").unwrap(),"keep");
     }
 }

@@ -39,12 +39,14 @@ pub fn sync(wanted: bool) -> Result<()> {
     let result = CLOCK.with(|cell| {
         let mut slot = cell.borrow_mut();
         if let Some(clock) = slot.as_ref() {
+            crate::window_policy::apply(clock.hwnd)?;
             clock.invalidate()
         } else {
             *slot = Some(ClockWindow::create()?);
             Ok(())
         }
     });
+    if result.is_err() { shutdown(); }
     drain_pending_shutdown();
     result
 }
@@ -272,6 +274,8 @@ impl ClockWindow {
                 Some((&*clock.state as *const WindowState).cast()),
             )?;
             SetLayeredWindowAttributes(clock.hwnd, COLORREF(0), 255, LWA_ALPHA)?;
+            // The clock is still hidden; rejected protection must not expose it.
+            crate::window_policy::apply(clock.hwnd)?;
         }
         clock.refresh_layout(true)?;
         Ok(clock)
@@ -365,6 +369,7 @@ impl ClockWindow {
 impl Drop for ClockWindow {
     fn drop(&mut self) {
         if !self.state.destroyed.get() && !self.hwnd.is_invalid() {
+            crate::window_policy::unregister(self.hwnd);
             // WM_NCDESTROY marks dead and clears the borrowed pointer. Fonts and Box are
             // still alive until this DestroyWindow call has completed.
             unsafe { let _ = DestroyWindow(self.hwnd); }
@@ -432,6 +437,7 @@ extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPA
                 return LRESULT(1);
             }
             WM_NCDESTROY => {
+                crate::window_policy::unregister(hwnd);
                 let state = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const WindowState;
                 if let Some(state) = state.as_ref() {
                     state.destroyed.set(true);

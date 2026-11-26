@@ -46,6 +46,8 @@ const MENU_EXIT: usize = 2;
 const MENU_MASCOT: usize = 3;
 const MENU_MINIMAL: usize = 4;
 const MENU_OPEN: usize = 5;
+const MENU_TRAY_ONLY: usize = 6;
+const MENU_CAPTURE: usize = 7;
 const SETTINGS_FILE: &str = "settings.txt";
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 const RUN_VALUE: PCWSTR = w!("NotchLite");
@@ -129,6 +131,7 @@ struct App {
     hidden_for_fullscreen: bool,
     /// An explicit user request keeps the real panel open until Escape/collapse.
     explicit_panel: bool,
+    capture_error: Option<i32>,
     hovering: bool,
     keyboard: bool,
     input_utf16: Utf16Input,
@@ -288,6 +291,20 @@ impl App {
     fn reload_settings(&mut self) -> std::io::Result<()> {
         // Keep the complete active snapshot if the file cannot be read.
         let settings = store::try_read_kv(SETTINGS_FILE)?;
+        crate::window_policy::set_policy(crate::window_policy::Policy::from_settings(&settings));
+        let was_blocked=self.capture_error.is_some();
+        let capture_error=crate::window_policy::apply(self.hwnd).err().map(|error| error.code().0);
+        self.capture_error=capture_error;
+        if self.capture_error.is_some() {
+            self.stop_animation();
+            unsafe { let _=ShowWindow(self.hwnd,SW_HIDE); }
+        }
+        // Request exclusion before a style transition can show the window again.
+        self.apply_panel_style();
+        if was_blocked && self.capture_error.is_none() && !self.hidden_for_fullscreen {
+            unsafe { let _=ShowWindow(self.hwnd,if self.explicit_panel { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE }); }
+        }
+        update_tray_tip(self.hwnd,self.capture_error.is_some());
         theme::apply(theme::Preset::from_setting(settings.get(theme::PRESET_KEY).map(String::as_str)));
         if let Err(error) = self.assistant.sync(&settings, self.hwnd) {
             worker::peek(Peek { icon: "\u{E946}".into(), emoji: false, accent: theme::warn(),
@@ -414,7 +431,7 @@ impl App {
                 self.start_animation();
             }
             unsafe {
-                let _ = ShowWindow(self.hwnd, if fullscreen { SW_HIDE } else { SW_SHOWNOACTIVATE });
+                let _ = ShowWindow(self.hwnd, if fullscreen || self.capture_error.is_some() { SW_HIDE } else { SW_SHOWNOACTIVATE });
             }
         }
         if !fullscreen {
@@ -433,7 +450,7 @@ impl App {
     }
 
     fn start_animation(&mut self) {
-        if self.hidden_for_fullscreen {
+        if self.hidden_for_fullscreen || self.capture_error.is_some() {
             return;
         }
         if !self.animating {
@@ -464,17 +481,12 @@ impl App {
         }
     }
 
-    /// Expose an explicitly opened panel to taskbar/Alt-Tab, retaining the
-    /// composition window style. Returning to the capsule restores tool-window behavior.
+    /// Keep explicit panels focusable; tray-only hides their taskbar/Alt-Tab entry.
     fn apply_panel_style(&self) {
         unsafe {
             let old = GetWindowLongPtrW(self.hwnd, GWL_EXSTYLE) as u32;
             let mode_mask = WS_EX_APPWINDOW.0 | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0;
-            let mode = if self.explicit_panel {
-                WS_EX_APPWINDOW.0
-            } else {
-                WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0
-            };
+            let mode = crate::window_policy::panel_style(self.explicit_panel,crate::window_policy::current().tray_only).0;
             let style = (old & !mode_mask) | mode;
             if style != old {
                 // The shell updates taskbar membership when the window is shown again.
@@ -484,7 +496,7 @@ impl App {
                     self.hwnd, HWND::default(), 0, 0, 0, 0,
                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
                 );
-                if !self.hidden_for_fullscreen {
+                if !self.hidden_for_fullscreen && self.capture_error.is_none() {
                     let _ = ShowWindow(self.hwnd, if self.explicit_panel { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE });
                 }
             }
@@ -496,6 +508,7 @@ impl App {
         self.guard_z_order();
         self.apply_panel_style();
         self.set_expanded(true);
+        if self.capture_error.is_some() { return; }
         unsafe {
             let _ = ShowWindow(self.hwnd, SW_SHOWNORMAL);
             let _ = SetForegroundWindow(self.hwnd);
@@ -544,7 +557,7 @@ impl App {
     fn redraw(&mut self) {
         // Worker results, timer state and edits still update while hidden;
         // none of those paths should decode/draw/present an invisible frame.
-        if self.hidden_for_fullscreen {
+        if self.hidden_for_fullscreen || self.capture_error.is_some() {
             return;
         }
         let panel = self.panel();
@@ -1032,7 +1045,7 @@ impl App {
     /// Arms the idle poll only while the optional mascot is enabled and visible.
     fn sync_mascot_timer(&self) {
         unsafe {
-            if self.mascot_enabled && !self.hidden_for_fullscreen {
+            if self.mascot_enabled && !self.hidden_for_fullscreen && self.capture_error.is_none() {
                 SetTimer(self.hwnd, TIMER_MASCOT, 500, None);
             } else {
                 let _ = KillTimer(self.hwnd, TIMER_MASCOT);
@@ -1058,6 +1071,12 @@ impl App {
             let _ = AppendMenuW(menu, mascot_flags, MENU_MASCOT, w!("Mascot"));
             let minimal_flags = if self.minimal { MF_STRING | MF_CHECKED } else { MF_STRING };
             let _ = AppendMenuW(menu, minimal_flags, MENU_MINIMAL, w!("Minimal notch"));
+            let policy=crate::window_policy::current();
+            let _ = AppendMenuW(menu, if policy.tray_only { MF_STRING|MF_CHECKED } else { MF_STRING }, MENU_TRAY_ONLY, w!("Tray only"));
+            let _ = AppendMenuW(menu, if policy.exclude_capture { MF_STRING|MF_CHECKED } else { MF_STRING }, MENU_CAPTURE, w!("Exclude from capture"));
+            if self.capture_error.is_some() {
+                let _=AppendMenuW(menu,MF_STRING|MF_GRAYED,0,w!("Esclusione non disponibile: finestra nascosta"));
+            }
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, MENU_EXIT, w!("Exit"));
             let mut pt = POINT::default();
@@ -1068,6 +1087,8 @@ impl App {
             match cmd.0 as usize {
                 MENU_OPEN => self.open_panel(),
                 MENU_STARTUP => set_startup(!startup_enabled()),
+                MENU_TRAY_ONLY => self.set_setting(crate::window_policy::TRAY_ONLY_KEY,if policy.tray_only { "0" } else { "1" }),
+                MENU_CAPTURE => self.set_setting(crate::window_policy::EXCLUDE_CAPTURE_KEY,if policy.exclude_capture { "0" } else { "1" }),
                 MENU_MASCOT => {
                     let value = if self.mascot_enabled { "0" } else { "1" };
                     self.set_setting("mascot", value);
@@ -1078,6 +1099,7 @@ impl App {
                     self.set_setting("minimal", value);
                 }
                 MENU_EXIT => {
+                    self.assistant.stop_before_exit();
                     let _ = DestroyWindow(self.hwnd);
                 }
                 _ => {}
@@ -1225,6 +1247,14 @@ fn remove_tray_icon(hwnd: HWND) {
     }
 }
 
+fn update_tray_tip(hwnd: HWND, blocked: bool) {
+    let label=if blocked { "NotchLite: esclusione cattura non disponibile. Usa il menu dell'icona." } else { "NotchLite" };
+    let mut data=NOTIFYICONDATAW { cbSize:std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+        hWnd:hwnd,uID:1,uFlags:NIF_TIP,..Default::default() };
+    for (target,unit) in data.szTip.iter_mut().zip(label.encode_utf16()) { *target=unit; }
+    unsafe { let _=Shell_NotifyIconW(NIM_MODIFY,&data); }
+}
+
 fn dropped_paths(drop: HDROP) -> Vec<PathBuf> {
     unsafe {
         let count = DragQueryFileW(drop, u32::MAX, None);
@@ -1247,10 +1277,16 @@ fn point_from_lparam(lparam: LPARAM, scale: f32) -> Point {
 }
 
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if msg == WM_NCDESTROY { crate::window_policy::unregister(hwnd); }
     // DestroyWindow sends WM_DESTROY synchronously, including when Exit is
     // selected while APP is already borrowed by this window procedure.
     // Shutdown must not depend on acquiring that RefCell borrow again.
     if msg == WM_DESTROY {
+        APP.with(|cell| {
+            if let Ok(mut slot)=cell.try_borrow_mut() {
+                if let Some(app)=slot.as_mut() { app.assistant.stop_before_exit(); }
+            }
+        });
         crate::assist_overlay::shutdown_all();
         desktop_clock::shutdown();
         unsafe {
@@ -1334,6 +1370,9 @@ pub fn request_open_existing() -> Result<bool> {
 
 pub fn run(open_panel: bool) -> Result<()> {
     unsafe {
+        let settings=store::try_read_kv(SETTINGS_FILE)
+            .map_err(|error|Error::new(E_FAIL,format!("Cannot read NotchLite settings: {error}")))?;
+        crate::window_policy::set_policy(crate::window_policy::Policy::from_settings(&settings));
         let instance = GetModuleHandleW(None)?;
         let class = w!("NotchLiteWindow");
         let wc = WNDCLASSEXW {
@@ -1352,7 +1391,7 @@ pub fn run(open_panel: bool) -> Result<()> {
         let px_h = (theme::WINDOW_H * scale).round() as i32;
         let screen_w = GetSystemMetrics(SM_CXSCREEN);
 
-        let interaction_style = if open_panel { WS_EX_APPWINDOW } else { WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE };
+        let interaction_style = crate::window_policy::panel_style(open_panel,crate::window_policy::current().tray_only);
         let hwnd = CreateWindowExW(
             WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_ACCEPTFILES | interaction_style,
             class,
@@ -1368,6 +1407,8 @@ pub fn run(open_panel: bool) -> Result<()> {
             None,
         )?;
 
+        // The HWND is still hidden. Reload retries and reports a rejected request.
+        let initial_capture_error = crate::window_policy::apply(hwnd).err().map(|error|error.code().0);
         let gfx = Gfx::new(hwnd, px_w as u32, px_h as u32, scale)?;
         let waker = Waker::new(hwnd);
         let mut app = App {
@@ -1385,6 +1426,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             last_region: (0, 0, 0),
             hidden_for_fullscreen: false,
             explicit_panel: open_panel,
+            capture_error: initial_capture_error,
             hovering: false,
             keyboard: false,
             input_utf16: Utf16Input::default(),
@@ -1417,10 +1459,12 @@ pub fn run(open_panel: bool) -> Result<()> {
         app.height.snap(app.height.target);
         app.update_region();
         app.redraw();
-        let initially_visible = !app.hidden_for_fullscreen;
+        let initially_visible = !app.hidden_for_fullscreen && app.capture_error.is_none();
+        let capture_blocked=app.capture_error.is_some();
         APP.with(|cell| *cell.borrow_mut() = Some(app));
 
         add_tray_icon(hwnd);
+        update_tray_tip(hwnd,capture_blocked);
         // OLE drop target: gives drag-over feedback (expand to the shelf) and
         // accepts links; WM_DROPFILES stays as a fallback if this fails.
         let _ = RegisterDragDrop(hwnd, &droptarget::create(Box::new(ShellDrop)));

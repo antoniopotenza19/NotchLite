@@ -28,14 +28,14 @@
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 131,
+    "rust_tests_passed": 137,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "No GUI or real audio capture; public WAV STT and active-assistant text IPC tested headlessly.",
+    "visual_test_limitation": "No GUI, real HWND affinity or screen-sharing check. OS metadata and public WAV STT tested headlessly; call text-bridge evidence retained from iteration 9.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-9/VALIDATION.json",
+    "review_validation": "docs/review/iteration-10/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
@@ -51,7 +51,10 @@
     "call_capture_live_tested": false,
     "active_chat_text_bridge_tested": true,
     "cloud_audio_api_enabled": false,
-    "call_ai_text_bridge_available": true
+    "call_ai_text_bridge_available": true,
+    "privacy_metadata_tested": true,
+    "capture_exclusion_implemented": true,
+    "screen_sharing_tested": false
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -115,8 +118,8 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "96cb6d39c1c083c8db41f609efd58bc9b2d2267903e5714e06c2db49d39d5598",
-    "bytes": 2332160
+    "sha256": "a7d64ea8b795eda07dc938e2b41c09576e89616a87b25fffe08922086f821693",
+    "bytes": 2345472
   },
   "new_source_files": [
     "src/assist.rs",
@@ -140,14 +143,15 @@
     "src/phone.rs",
     "src/phone/wire.rs",
     "src/phone_qr.rs",
-    "src/profile.rs"
+    "src/profile.rs",
+    "src/window_policy.rs"
   ],
   "review_methods": [
     "project-local Graphify AST workflow",
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.8",
+  "version": "0.1.9",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",

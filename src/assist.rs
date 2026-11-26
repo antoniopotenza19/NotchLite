@@ -76,9 +76,13 @@ pub struct Assistant {
     manual_call: bool,
     dismissed_call: Option<u64>,
     note: Option<String>,
+    capture_exclusion: bool,
 }
 
 impl Assistant {
+    /// Revoke capture before shell teardown destroys its visible indicator.
+    pub fn stop_before_exit(&mut self) { self.stop_call(); }
+
     pub fn new() -> Self {
         Self {
             overlays: OverlayManager::new(), config: OverlayConfig::default(), availability: OverlayAvailability::Off,
@@ -90,10 +94,21 @@ impl Assistant {
             selected_thread: None, selected_target: None, attention: BTreeMap::new(), manual_call: false,
             observed_created_thread: None,
             dismissed_call: None, note: None,
+            capture_exclusion: true,
         }
     }
 
     pub fn sync(&mut self, settings: &BTreeMap<String, String>, hwnd: HWND) -> Result<(), String> {
+        // A settings reload can reapply affinity or recreate/hide a panel. Revoke
+        // audio before that work, including when the OS rejects the new policy.
+        let next_capture_exclusion = crate::window_policy::current().exclude_capture;
+        let privacy_changed = self.capture_exclusion != next_capture_exclusion;
+        let had_call = self.call_session.is_some();
+        self.stop_call();
+        self.capture_exclusion = next_capture_exclusion;
+        if privacy_changed || had_call {
+            self.call_notice = Some("Impostazioni aggiornate: conferma nuovamente la trascrizione per riprendere l'ascolto.".into());
+        }
         let config = OverlayConfig {
             codex_dashboard: enabled(settings, DASHBOARD_KEY), call_panel: enabled(settings, CALL_KEY),
             monitor_device: settings.get(MONITOR_KEY).filter(|v| !v.is_empty() && *v != "auto").cloned(),
@@ -120,7 +135,14 @@ impl Assistant {
         self.config = config.clone();
         self.overlays.set_wake_window(hwnd);
         let previous = self.availability;
-        self.availability = self.overlays.sync(config).map_err(|e| format!("Pannelli assistente: {e}"))?;
+        self.availability = match self.overlays.sync(config) {
+            Ok(availability) => availability,
+            Err(error) => {
+                self.availability = OverlayAvailability::Off;
+                self.manage_workers();
+                return Err(format!("Pannelli assistente: {error}"));
+            }
+        };
         if self.availability != previous && (self.config.codex_dashboard || self.config.call_panel) {
             let message = match self.availability {
                 OverlayAvailability::WaitingForSecondary => Some("Collega un secondo monitor: i pannelli non vengono spostati sul primario."),

@@ -178,16 +178,27 @@ impl OverlayManager {
             if self.call_view.listening { self.enqueue(OverlayAction::StopCall); }
             self.call = None; self.call_view = CallView::default();
         }
-        self.refresh_placement()?;
-        for window in [&self.dashboard, &self.call].into_iter().flatten() { window.palette_changed()?; }
-        Ok(self.availability)
+        let result = (|| {
+            // Apply before placement can show an existing window again.
+            for window in [&self.dashboard, &self.call].into_iter().flatten() { window.apply_capture_policy()?; }
+            self.refresh_placement()?;
+            for window in [&self.dashboard, &self.call].into_iter().flatten() { window.palette_changed()?; }
+            Ok(self.availability)
+        })();
+        if result.is_err() { self.close_after_error(); }
+        result
     }
     pub fn display_changed(&mut self) -> Result<OverlayAvailability> {
         // Hide before enumeration so an unplugged display cannot become a
         // request to move the panels onto Windows' automatic primary fallback.
         for window in [&self.dashboard, &self.call].into_iter().flatten() { window.hide(); }
-        self.refresh_placement()?;
-        Ok(self.availability)
+        let result = (|| {
+            for window in [&self.dashboard, &self.call].into_iter().flatten() { window.apply_capture_policy()?; }
+            self.refresh_placement()?;
+            Ok(self.availability)
+        })();
+        if result.is_err() { self.close_after_error(); }
+        result
     }
     pub fn apply_dashboard(&mut self, view: DashboardView) {
         if !self.config.codex_dashboard { return; }
@@ -227,6 +238,15 @@ impl OverlayManager {
     fn enqueue(&mut self, action: OverlayAction) {
         let queue = self.queue.get_or_insert_with(|| Rc::new(ActionQueue { actions: RefCell::new(VecDeque::new()), wake: Cell::new(self.wake) }));
         queue.push(action);
+    }
+    fn close_after_error(&mut self) {
+        // The coordinator has already revoked capture before a settings/display
+        // transition. Keep a Stop action as a backstop for other callers.
+        if self.call_view.listening || self.call.is_some() { self.enqueue(OverlayAction::StopCall); }
+        for window in [&self.dashboard, &self.call].into_iter().flatten() { window.hide(); }
+        self.dashboard = None; self.call = None;
+        self.dashboard_view = DashboardView::default(); self.call_view = CallView::default();
+        self.availability = OverlayAvailability::Off;
     }
     fn prune_closed(&mut self) {
         if self.dashboard.as_ref().is_some_and(|w| w.state.destroyed.get()) { self.dashboard = None; self.dashboard_closed = true; }
@@ -375,12 +395,17 @@ impl OverlayWindow {
         };
         let window = Self { hwnd, state };
         WINDOWS.with(|items| items.borrow_mut().push(hwnd));
+        window.apply_capture_policy()?;
         create_controls(hwnd, &window.state)?;
         window.state.updating.set(false);
         if QUITTING.with(Cell::get) { return Err(Error::new(E_FAIL, "Application is shutting down")); }
         Ok(window)
     }
     fn hide(&self) { if !self.state.destroyed.get() { unsafe { let _ = ShowWindow(self.hwnd, SW_HIDE); } } }
+    fn apply_capture_policy(&self) -> Result<()> {
+        if self.state.destroyed.get() { return Err(Error::new(E_FAIL, "Overlay closed")); }
+        crate::window_policy::apply(self.hwnd)
+    }
     fn show(&self) { if !self.state.destroyed.get() && !QUITTING.with(Cell::get) { unsafe { let _ = ShowWindow(self.hwnd, SW_SHOWNOACTIVATE); } } }
     fn position(&self, rect: ScreenRect, dpi: u32) -> Result<()> {
         if self.state.destroyed.get() { return Err(Error::new(E_FAIL, "Overlay closed")); }
@@ -405,7 +430,10 @@ impl OverlayWindow {
 }
 impl Drop for OverlayWindow {
     fn drop(&mut self) {
-        if !self.state.destroyed.get() { unsafe { let _ = DestroyWindow(self.hwnd); } }
+        if !self.state.destroyed.get() {
+            crate::window_policy::unregister(self.hwnd);
+            unsafe { let _ = DestroyWindow(self.hwnd); }
+        }
         // Child windows are gone before their fonts/brushes and USERDATA Box.
     }
 }
@@ -739,6 +767,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
     let Some(state) = pointer.as_ref() else { return DefWindowProcW(hwnd, message, wparam, lparam) };
     match message {
         WM_NCDESTROY => {
+            crate::window_policy::unregister(hwnd);
             if state.kind == Kind::Call { state.queue.push(OverlayAction::StopCall); }
             state.destroyed.set(true); SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
             WINDOWS.with(|items| items.borrow_mut().retain(|h| *h != hwnd));
@@ -826,6 +855,21 @@ mod tests {
         assert_eq!(call_action(&view, CONFIRM_AI), Some(OverlayAction::ConfirmCall { candidate_key: 42, context: String::new(), with_ai: true }));
         view.listening = true; assert!(call_action(&view, CONFIRM).is_none());
         assert_eq!(call_action(&view, STOP), Some(OverlayAction::StopCall));
+    }
+    #[test]
+    fn failed_window_update_closes_provider_views_and_requests_stop() {
+        let mut manager = OverlayManager::new();
+        manager.config.call_panel = true; manager.config.codex_dashboard = true;
+        manager.availability = OverlayAvailability::Ready;
+        manager.call_view = CallView { visible: true, listening: true, transcript: "Synthetic private text".into(), ..Default::default() };
+        manager.dashboard_view.detail = "Synthetic chat".into();
+        manager.close_after_error();
+        assert_eq!(manager.availability, OverlayAvailability::Off);
+        assert!(manager.call.is_none() && manager.dashboard.is_none());
+        assert_eq!(manager.call_view, CallView::default());
+        assert_eq!(manager.dashboard_view, DashboardView::default());
+        assert!(manager.drain_actions().iter().any(|action| matches!(action, OverlayAction::StopCall)));
+        assert!(manager.config.call_panel && manager.config.codex_dashboard);
     }
     #[test]
     fn an_invisible_interval_rearms_a_later_call_with_the_same_identity() {

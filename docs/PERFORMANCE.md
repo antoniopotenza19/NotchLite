@@ -1,6 +1,6 @@
 # Consumi e prove
 
-La GUI 0.1.8 e l'orologio non sono stati avviati né misurati: il collegamento al daemon Codex è stato provato in modalità headless. Il daemon è un processo separato e aggiunge un costo RAM proprio; non è incluso nelle misure storiche della notch. Le ultime misure restano quelle della 0.1.2 in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio era 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non era raggiunto in tutti gli scenari. Non attribuire questi valori alla 0.1.8, all'orologio acceso o al backend telefono.
+La GUI 0.1.9 e l'orologio non sono stati avviati né misurati: il collegamento al daemon Codex è stato provato in modalità headless. Il daemon è un processo separato e aggiunge un costo RAM proprio; non è incluso nelle misure storiche della notch. Le ultime misure restano quelle della 0.1.2 in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio era 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non era raggiunto in tutti gli scenari. Non attribuire questi valori alla 0.1.9, all'orologio acceso o al backend telefono.
 
 I valori nella tabella seguente sono budget iniziali, non risultati misurati. Il campione della prima build in benchmarks/base-idle.json e BUILD-VALIDATION.md resta storico.
 
@@ -29,8 +29,10 @@ Per la latenza usare tracce ETW o una ripresa con timestamp: un controllo del fi
 
 ## Verifiche non ancora eseguite
 
-Accessibilità, DPI/multi-monitor, rete dei moduli opzionali, fullscreen reale, uso prolungato, memoria GPU, orologio e latenza. I risultati CLI correnti sono nel [report di validazione](review/iteration-9/VALIDATION.json). Apertura e navigazione erano state osservate nella 0.1.2; la GUI della 0.1.8 non è stata avviata. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.
+Accessibilità, DPI/multi-monitor, rete dei moduli opzionali, fullscreen reale, uso prolungato, memoria GPU, orologio e latenza. I risultati CLI correnti sono nel [report di validazione](review/iteration-10/VALIDATION.json). Apertura e navigazione erano state osservate nella 0.1.2; la GUI della 0.1.8 non è stata avviata. L'avvio del processo e il consumo inattivo sono verifiche distinte dal funzionamento completo dell'interfaccia.
 
 ## Motore di trascrizione opzionale
 
 Su un WAV pubblico inglese di sei secondi, il processo separato whisper-cli CPU con tiny-q5_1, due thread e audio context 512 ha impiegato 309 ms. Picchi campionati: **96,12 MiB working set** e **605,76 MiB memoria privata impegnata**. La diagnostica del prodotto ha impiegato 281 ms. Queste misure riguardano un file e il solo Whisper: non la GUI, WASAPI, una call italiana o la latenza completa. Il motore è avviato per segmento e non caricato quando la trascrizione è spenta. Il budget del profilo base non si applica alla trascrizione attiva. Vedere [CALL-TRANSCRIPTION.md](CALL-TRANSCRIPTION.md).
+
+Le impostazioni tray/cattura della 0.1.9 hanno test puri e diagnostica OS; non è stato misurato il loro costo in GUI. [Validazione corrente](review/iteration-10/VALIDATION.json).

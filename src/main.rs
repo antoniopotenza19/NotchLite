@@ -27,6 +27,7 @@ mod shell;
 mod store;
 mod theme;
 mod worker;
+mod window_policy;
 
 use windows::core::w;
 use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
@@ -35,6 +36,7 @@ use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if window_policy::run_diagnostic()? { return Ok(()); }
     if call_coach::run_diagnostic()? { return Ok(()); }
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     if args.first().is_some_and(|a| a == "--call-transcription-check") {

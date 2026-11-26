@@ -37,6 +37,7 @@ jobs:
           Copy-Item docs/MODERN-NAVIGATION.md,docs/PHONE-SHARE.md artifact/NotchLite-portatile
           Copy-Item docs/COMPANION.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-DASHBOARD.md,docs/CALL-ASSISTANT.md artifact/NotchLite-portatile
+          Copy-Item docs/SCREEN-PRIVACY.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-SHARED-SERVER.md artifact/NotchLite-portatile
           Copy-Item docs/CALL-LIVE.md,docs/CALL-TRANSCRIPTION.md artifact/NotchLite-portatile
           New-Item -ItemType Directory artifact/NotchLite-portatile/tools | Out-Null
