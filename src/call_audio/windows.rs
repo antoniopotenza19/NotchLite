@@ -1,4 +1,4 @@
-//! Original metadata-only Core Audio implementation. No IAudioClient/capture.
+//! Original Core Audio catalog and owner MTA for explicitly confirmed loopback.
 use super::*;
 use std::collections::HashMap;
 use std::sync::mpsc::{self, SyncSender};
@@ -19,6 +19,7 @@ unsafe impl Sync for Wake {}
 impl Wake {
     pub(super) fn new() -> Result<Self, String> { unsafe { CreateEventW(None, false, false, None).map(Self).map_err(|e| e.to_string()) } }
     pub(super) fn signal(&self) { unsafe { let _ = SetEvent(self.0); } }
+    pub(super) fn handle(&self) -> HANDLE { self.0 }
     fn wait(&self, ms: u32) { unsafe { let _ = WaitForSingleObject(self.0, ms); } }
 }
 impl Drop for Wake { fn drop(&mut self) { unsafe { let _ = CloseHandle(self.0); } } }
@@ -79,9 +80,9 @@ unsafe fn owned_wide(value: PWSTR) -> Option<String> {
     result
 }
 
-struct Process { handle: HANDLE, started: u64, label: String, broad: bool }
+pub(super) struct Process { handle: HANDLE, pub(super) started: u64, label: String, broad: bool }
 impl Process {
-    fn open(pid: u32) -> Option<Self> {
+    pub(super) fn open(pid: u32) -> Option<Self> {
         if pid == 0 { return None; }
         let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, pid).ok()? };
         let mut result = Self { handle, started: 0, label: format!("Process {pid}"), broad: true };
@@ -98,7 +99,7 @@ impl Process {
         }
         if result.alive() { Some(result) } else { None }
     }
-    fn alive(&self) -> bool { unsafe { WaitForSingleObject(self.handle, 0) == WAIT_TIMEOUT } }
+    pub(super) fn alive(&self) -> bool { unsafe { WaitForSingleObject(self.handle, 0) == WAIT_TIMEOUT } }
 }
 impl Drop for Process { fn drop(&mut self) { unsafe { let _ = CloseHandle(self.handle); } } }
 
@@ -184,6 +185,7 @@ pub(super) fn run(shared: Arc<Shared>, ready: SyncSender<Result<(), String>>) {
         let (tx, rx) = mpsc::sync_channel(MAX_EVENTS);
         let signals = Arc::new(Signals { shared: Arc::clone(&shared), dirty: AtomicBool::new(true), overflow: AtomicBool::new(false), events: tx });
         let mut devices: HashMap<String, Device> = HashMap::new(); let mut communication_ids = HashMap::new();
+        let mut capture: Option<capture::Capture> = None;
         let _ = ready.try_send(Ok(()));
         let mut last = Instant::now() - Duration::from_secs(5);
         while !shared.stop.load(Ordering::Acquire) {
@@ -193,13 +195,18 @@ pub(super) fn run(shared: Arc<Shared>, ready: SyncSender<Result<(), String>>) {
                 let Ok(event) = rx.try_recv() else { break; };
                 match event {
                     DuckEvent::Begin(id) if communication_ids.len() < MAX_TARGETS => { communication_ids.insert(id, Instant::now()); }
-                    DuckEvent::End(id) => { communication_ids.remove(&id); }
+                    DuckEvent::End(id) => {
+                        communication_ids.remove(&id);
+                        if capture.as_ref().is_some_and(|c| c.target.session_id == id) {
+                            shared.request_stop(Some("The selected communications session ended".into()));
+                        }
+                    }
                     _ => {}
                 }
             }
             if signals.overflow.swap(false, Ordering::AcqRel) {
                 communication_ids.clear();
-                shared.state().snapshot.last_error = Some("Audio metadata events overflowed; no listening is active".into());
+                shared.request_stop(Some("Audio metadata events overflowed; capture stopped".into()));
             }
             if signals.dirty.swap(false, Ordering::AcqRel) || last.elapsed() >= Duration::from_secs(2) {
                 last = Instant::now();
@@ -216,14 +223,64 @@ pub(super) fn run(shared: Arc<Shared>, ready: SyncSender<Result<(), String>>) {
                     }
                 }
             }
-            shared.wake.wait(1000);
+            service_capture(&shared, &devices, &mut capture);
+            let busy = capture.is_some() || shared.state().snapshot.capture.is_some();
+            shared.wake.wait(if busy { 20 } else { 1000 });
+        }
+        shared.request_stop(None);
+        if let Some(current) = capture.take() {
+            let generation = current.generation; drop(current); shared.state().finish_capture(generation);
         }
         // Unregister and release on this MTA, never within an audio callback.
         devices.clear();
         Ok::<(), String>(())
     })();
     if let Err(error) = result { let _ = ready.try_send(Err(error.clone())); shared.state().snapshot.last_error = Some(error); }
+    shared.wanted_generation.store(0, Ordering::Release);
     let mut state = shared.state(); state.snapshot.candidates.clear(); state.snapshot.suggested = None; state.snapshot.capture = None;
+    state.pending = None; state.pcm.clear(); state.partial.clear();
+}
+
+fn selected_live(devices: &HashMap<String, Device>, target: &AudioTarget) -> bool {
+    devices.values().any(|device| device.sessions.get(&target.session_id)
+        .and_then(|session| session.target(&target.session_id))
+        .is_some_and(|current| same_identity(&current, target)))
+}
+
+fn service_capture(shared: &Arc<Shared>, devices: &HashMap<String, Device>, active: &mut Option<capture::Capture>) {
+    let wanted = shared.wanted_generation.load(Ordering::Acquire);
+    if active.as_ref().is_some_and(|capture| capture.generation != wanted) {
+        if let Some(capture) = active.take() {
+            let generation = capture.generation; drop(capture); shared.state().finish_capture(generation);
+        }
+    }
+    if wanted == 0 {
+        let generation = shared.state().snapshot.capture.as_ref().map(|s| s.generation);
+        if let Some(generation) = generation { shared.state().finish_capture(generation); }
+        return;
+    }
+    if active.is_none() {
+        let pending = shared.state().pending.take();
+        if let Some(target) = pending {
+            let result = if selected_live(devices, &target) {
+                capture::Capture::begin(shared, target, wanted)
+            } else { Err("The selected audio session ended or changed before capture".into()) };
+            match result {
+                Ok(capture) => *active = Some(capture),
+                Err(error) => { shared.request_stop(Some(error)); shared.state().finish_capture(wanted); return; }
+            }
+        }
+    }
+    if let Some(capture) = active.as_mut() {
+        let result = if selected_live(devices, &capture.target) { capture.poll(shared) }
+            else { Err("The selected audio session ended or changed; capture stopped".into()) };
+        if let Err(error) = result { shared.request_stop(Some(error)); }
+    }
+    if shared.wanted_generation.load(Ordering::Acquire) != wanted {
+        if let Some(capture) = active.take() {
+            let generation = capture.generation; drop(capture); shared.state().finish_capture(generation);
+        }
+    }
 }
 
 fn refresh(enumerator: &IMMDeviceEnumerator, devices: &mut HashMap<String, Device>, signals: &Arc<Signals>) -> Result<Vec<AudioTarget>, String> {

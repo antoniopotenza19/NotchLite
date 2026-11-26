@@ -1,18 +1,18 @@
 # Provare NotchLite
 
-La preview 0.1.7 aggiunge **Settings > Codex dashboard** e **Call panel (no audio)**, entrambi spenti inizialmente. I pannelli sono ancorati al secondario, rispettivamente in alto a sinistra e a destra. Con più secondari usa **Assistant monitor**; senza un secondario valido non ripiegano sul primario.
+La preview 0.1.8 include **Settings > Codex dashboard** e **Call assistant**, entrambi spenti inizialmente. I pannelli sono ancorati al secondario, rispettivamente in alto a sinistra e a destra. Con più secondari usa **Assistant monitor**; senza un secondario valido non ripiegano sul primario.
 
 Il bridge si collega a un daemon Codex locale condiviso, usando l'accesso ChatGPT del CLI ufficiale. Sul PC di sviluppo il server è già stato preparato. Nel pannello puoi inserire la cartella del progetto, premere **Nuova chat** e poi **Send**; le nuove chat partono in sola lettura. **Avvia server locale** serve quando il pacchetto ufficiale completo è installato ma il server è spento. Per un altro PC: [preparazione del server](CODEX-SHARED-SERVER.md).
 
 Le chat già aperte nell'attuale Codex Desktop incorporato **restano separate**. Token e limiti vengono dal server, RAM/CPU sono totali dei processi osservati, non costi per chat. Domande ricevute hanno risposte esplicite; autorizzazioni richiedono un client collegato allo stesso server. [Dettagli e limiti](CODEX-DASHBOARD.md).
 
-Il pannello call è soltanto un rilevatore di possibili chiamate e sessioni audio: **non ascolta, non trascrive e non produce suggerimenti AI**. Rispetta la scelta di mantenere il solo abbonamento senza API separate. [Perimetro](CALL-ASSISTANT.md).
+Per le call prepara il motore con `tools/Setup-CallTranscription.ps1` (già fatto sul PC di sviluppo), abilita **Call assistant**, verifica l'app e scegli **Trascrivi** oppure **Trascrivi + AI**. L'audio resta locale; nella seconda modalità segui [CALL-LIVE.md](CALL-LIVE.md) dalla chat AI da usare. Stop ferma l'ascolto e conserva il testo visibile. Il rilevamento non avvia nulla automaticamente. [Uso e limiti](CALL-ASSISTANT.md).
 
 Diagnostica senza finestre: `notchlite.exe --codex-check` verifica solo i metadati locali; `notchlite.exe --codex-connect-check` apre il bridge reale e legge account/quote, senza inviare messaggi. `--codex-server-start` richiede esplicitamente l'avvio persistente del daemon. Nessuno di questi comandi apre l'app grafica o modifica le preferenze NotchLite.
 
 1. Scarica NotchLite-portatile.zip dalla sezione Releases del repository.
 2. Estrai l'intera cartella.
-3. Apri notchlite.exe con un doppio clic. Non serve installare Rust.
+3. Chiudi una precedente NotchLite eventualmente aperta, poi apri il nuovo notchlite.exe con un doppio clic. Non serve installare Rust.
 4. Il pannello si apre in alto al centro del monitor principale ed è presente in taskbar/Alt-Tab. La barra a icone cambia pagina; il nome della sezione compare sotto il contenuto. Ctrl+Tab/Ctrl+Shift+Tab cambiano pagina fuori dagli editor. Se la barra non entra, restano frecce e puntini.
 5. Escape riduce il pannello alla capsula. Se stai scrivendo, il primo Escape annulla l'editor. La capsula si apre al passaggio del mouse; rilanciare l'EXE o usare Open panel dal menu la apre in modo persistente.
 

@@ -1,7 +1,7 @@
 # Modified for NotchLite: package identity and license metadata.
 [package]
 name = "notchlite"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 license = "Apache-2.0"
 description = "A native Windows notch, derived from Ada, with an opt-in feature profile"
@@ -48,6 +48,7 @@ features = [
     "Win32_Graphics_Imaging",
     "Win32_Graphics_Imaging_D2D",
     "Win32_Security",
+    "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
@@ -61,6 +62,7 @@ features = [
     "Win32_System_SystemInformation",
     "Win32_System_SystemServices",
     "Win32_System_Threading",
+    "Win32_System_Variant",
     "Win32_System_WinRT",
     "Win32_UI_HiDpi",
     "Win32_UI_Controls",

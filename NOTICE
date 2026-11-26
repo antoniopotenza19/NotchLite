@@ -1,7 +1,7 @@
 Ada — Copyright 2026 Yunus Emre Salcan. Licensed under the Apache License 2.0.
 
 NotchLite is a modified distribution of Ada, based on upstream revision
-5a1e17f040672a71685872b1b234e01d02a47bb5. Modified 2026-11-23.
+5a1e17f040672a71685872b1b234e01d02a47bb5. Modified 2026-11-26.
 Changes: separate application identity/storage, opt-in first-run settings,
 mascot timer lifecycle, animation interval, measurement tooling and project docs.
 Original attribution and third-party notices are retained below.
@@ -24,7 +24,11 @@ Rust dependency license/notice texts are distributed under licenses/rust;
 mobile dependency notices are under companion. Preserve these with binaries.
 Version 0.1.7 adds opt-in secondary-monitor GDI panels, a local Codex daemon
 client, process metrics and a metadata-only Windows communications detector.
-Audio capture and AI call processing remain disabled in subscription-only mode.
+In version 0.1.7, audio capture and AI call processing remained disabled.
+Version 0.1.8 adds explicitly confirmed application process-loopback capture,
+local whisper.cpp transcription and an optional text-only bridge for an active
+assistant. whisper.cpp and Whisper model dependencies are separate optional
+downloads with their original MIT notices; see docs/CALL-TRANSCRIPTION.md.
 The current embedded Codex Desktop runtime is not connected by this bridge.
 
 ========================================================================

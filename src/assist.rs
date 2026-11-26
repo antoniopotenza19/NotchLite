@@ -1,4 +1,4 @@
-//! Opt-in coordinator. Read-only call metadata never becomes Codex input.
+//! Opt-in coordinator. Call audio requires a new explicit confirmation per session.
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -19,7 +19,6 @@ pub const CALL_KEY: &str = "call_panel";
 pub const MONITOR_KEY: &str = "assistant_monitor";
 pub const SOCKET_KEY: &str = "codex_socket";
 pub const CLI_KEY: &str = "codex_cli";
-const AUDIO_OFF: &str = "Audio AI disattivato: il solo abbonamento non abilita il collegamento audio di questa app. Nessuna acquisizione o invio audio.";
 
 pub fn enabled(map: &BTreeMap<String, String>, key: &str) -> bool {
     map.get(key).is_some_and(|value| value == "1")
@@ -66,6 +65,10 @@ pub struct Assistant {
     monitor: Option<AudioMonitor>,
     monitor_attempted: bool,
     audio: Option<AudioSnapshot>,
+    call_session: Option<crate::call_session::CallSession>,
+    call_transcript: String,
+    call_suggestion: String,
+    call_notice: Option<String>,
     selected_thread: Option<String>,
     observed_created_thread: Option<String>,
     selected_target: Option<u64>,
@@ -83,6 +86,7 @@ impl Assistant {
             cli: None, server_start: None, workspace: String::new(),
             codex: Snapshot::unavailable("Pannello chat disattivato"), metrics: None, resources: ResourceSnapshot::default(),
             monitor: None, monitor_attempted: false, audio: None,
+            call_session: None, call_transcript: String::new(), call_suggestion: String::new(), call_notice: None,
             selected_thread: None, selected_target: None, attention: BTreeMap::new(), manual_call: false,
             observed_created_thread: None,
             dismissed_call: None, note: None,
@@ -96,6 +100,8 @@ impl Assistant {
         };
         let socket = settings.get(SOCKET_KEY).filter(|value| !value.is_empty()).map(PathBuf::from);
         let cli = settings.get(CLI_KEY).filter(|value| !value.is_empty()).map(PathBuf::from);
+        if config.call_panel != self.config.call_panel || config.monitor_device != self.config.monitor_device
+            || socket != self.socket || cli != self.cli { self.stop_call(); }
         if config.codex_dashboard != self.config.codex_dashboard || socket != self.socket || cli != self.cli {
             self.bridge = None; self.bridge_attempted = false; self.attention.clear();
             self.selected_thread = None;
@@ -134,6 +140,7 @@ impl Assistant {
 
     fn manage_workers(&mut self) {
         if self.availability != OverlayAvailability::Ready {
+            self.stop_call();
             self.bridge = None; self.bridge_attempted = false;
             self.metrics = None; self.monitor = None; self.monitor_attempted = false;
             self.audio = None;
@@ -166,10 +173,12 @@ impl Assistant {
                     Err(error) => self.note = Some(error),
                 }
             }
-        } else { self.monitor = None; self.audio = None; }
+        } else { self.stop_call(); self.monitor = None; self.audio = None; }
     }
 
     pub fn display_changed(&mut self) {
+        // Never keep recording while a monitor/DPI transition hides the indicator.
+        self.stop_call();
         match self.overlays.display_changed() {
             Ok(availability) => self.availability = availability,
             Err(error) => { self.availability = OverlayAvailability::WaitingForSecondary; self.note = Some(error.to_string()); }
@@ -197,6 +206,8 @@ impl Assistant {
             if let Some(snapshot) = metrics.poll() { self.resources = snapshot; }
         }
         if let Some(monitor) = &self.monitor { self.audio = Some(monitor.snapshot()); }
+        if self.audio.as_ref().is_some_and(|audio| audio.suggested.is_none()) { self.dismissed_call = None; }
+        self.tick_call();
         if !self.selected_target.is_some_and(|key| self.audio.as_ref().is_some_and(|s| s.candidates.iter().any(|c| c.key == key))) {
             self.selected_target = None;
         }
@@ -272,16 +283,23 @@ impl Assistant {
                 }
                 self.selected_target = Some(target_key); self.manual_call = true;
             }
-            OverlayAction::ConfirmCall { candidate_key: _ } => {
-                // Deliberate product boundary chosen by the user: no capture/provider.
-                return Err(AUDIO_OFF.into());
+            OverlayAction::ConfirmCall { candidate_key, context, with_ai } => {
+                if let Err(error) = self.start_call(candidate_key, context, with_ai) {
+                    self.call_notice = Some(error.clone()); return Err(error);
+                }
             }
             OverlayAction::DeclineCall { candidate_key } => {
+                self.stop_call();
                 if let Some(monitor) = &self.monitor { monitor.decline(candidate_key); }
                 self.dismissed_call = Some(candidate_key); self.manual_call = false;
             }
-            OverlayAction::StopCall | OverlayAction::CloseCall => {
-                if let Some(monitor) = &self.monitor { monitor.stop_capture(); }
+            OverlayAction::StopCall => {
+                self.stop_call();
+                self.manual_call = true;
+                self.call_notice = Some("Ascolto interrotto. Il testo già trascritto resta visibile.".into());
+            }
+            OverlayAction::CloseCall => {
+                self.stop_call();
                 self.dismissed_call = self.audio.as_ref().and_then(|s| s.suggested).or(self.selected_target);
                 self.manual_call = false;
             }
@@ -380,8 +398,11 @@ impl Assistant {
         let suggested = self.audio.as_ref().and_then(|s| s.suggested);
         let key = self.selected_target.or(suggested);
         let candidate = key.and_then(|key| self.audio.as_ref()?.candidates.iter().find(|c| c.key == key));
-        let mut view = CallView { visible: self.config.call_panel && (self.manual_call || (suggested.is_some() && suggested != self.dismissed_call)),
-            provider: AUDIO_OFF.into(), can_listen: false, listening: false, candidate_key: candidate.map(|c| c.key), ..Default::default() };
+        let capture = self.audio.as_ref().and_then(|s| s.capture.as_ref());
+        let mut view = CallView { visible: self.config.call_panel && (capture.is_some() || self.manual_call || (suggested.is_some() && suggested != self.dismissed_call)),
+            provider: "Scegli Trascrivi oppure Trascrivi + AI · audio elaborato localmente".into(),
+            can_listen: self.monitor.is_some() && capture.is_none() && self.call_session.is_none(),
+            listening: capture.is_some(), candidate_key: candidate.map(|c| c.key), ..Default::default() };
         view.status = if suggested.is_some() { "Possibile chiamata rilevata" } else { "In attesa di una chiamata · solo metadati" }.into();
         view.scope = candidate.map(|c| format!("{} (PID {}) · audio dell'app e processi figli, non una singola scheda.", c.label, c.pid))
             .unwrap_or_else(|| "Nessun ascolto: la rilevazione usa soltanto metadati delle sessioni audio.".into());
@@ -389,8 +410,71 @@ impl Assistant {
             view.candidates = audio.candidates.iter().map(|c| CallTarget { key: c.key, label: c.label.clone() }).collect();
             if let Some(error) = &audio.last_error { view.status = error.clone(); }
         }
-        view.transcript = "Trascrizione non attiva".into(); view.suggestion = "Suggerimenti AI non attivi".into();
+        if let Some(capture) = capture {
+            view.status = match capture.state {
+                crate::call_audio::CapturePhase::Starting => "Avvio ascolto…",
+                crate::call_audio::CapturePhase::Listening => "Ascolto attivo · Stop interrompe la sessione",
+                crate::call_audio::CapturePhase::Stopping => "Arresto ascolto…",
+            }.into();
+            view.scope = format!("{} · audio dell'app e processi figli; può includere più schede.", capture.label);
+            view.provider = if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
+                "Whisper locale · testo leggibile da una chat AI attiva".into()
+            } else { "Solo trascrizione locale · collegamento AI spento".into() };
+        }
+        if let Some(notice) = &self.call_notice { view.status.push_str(" · "); view.status.push_str(notice); }
+        view.transcript = if self.call_transcript.is_empty() { "La trascrizione comparirà qui dopo l'avvio e una frase pronunciata.".into() } else { self.call_transcript.clone() };
+        view.suggestion = if self.call_suggestion.is_empty() {
+            if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
+                "Ponte testo pronto. Scrivi «avvia assistenza call» nella chat Codex da usare: l'agente leggerà le frasi e pubblicherà qui i suggerimenti mentre quella chat è attiva.".into()
+            } else { "Modalità solo trascrizione. Per i suggerimenti termina questa sessione e scegli Trascrivi + AI.".into() }
+        } else { self.call_suggestion.clone() };
         view
+    }
+
+    fn start_call(&mut self, key: u64, context: String, with_ai: bool) -> Result<(), String> {
+        if self.call_session.is_some() { return Err("Ascolto già in corso".into()); }
+        if context.len() > 2048 { return Err("Obiettivo della call troppo lungo".into()); }
+        let config = crate::call_stt::Configuration::discover()?;
+        let monitor = self.monitor.as_ref().ok_or("Rilevamento sessioni audio non disponibile")?;
+        monitor.confirm(key)?;
+        let capture = match monitor.snapshot().capture {
+            Some(capture) => capture,
+            None => { monitor.stop_capture(); self.audio = Some(monitor.snapshot()); return Err("Conferma audio non disponibile".into()); }
+        };
+        let session = match crate::call_session::CallSession::new(capture.generation, config, context, with_ai) {
+            Ok(session) => session,
+            Err(error) => { monitor.stop_capture(); self.audio = Some(monitor.snapshot()); return Err(error); }
+        };
+        self.call_session = Some(session);
+        self.audio = Some(monitor.snapshot());
+        self.call_transcript.clear(); self.call_suggestion.clear(); self.call_notice = None;
+        self.manual_call = true;
+        Ok(())
+    }
+
+    fn tick_call(&mut self) {
+        let Some(session) = &mut self.call_session else { return; };
+        let active = self.audio.as_ref().and_then(|s| s.capture.as_ref()).is_some_and(|s|
+            s.generation == session.generation && s.state != crate::call_audio::CapturePhase::Stopping);
+        if !active { self.stop_call(); return; }
+        if let Some(monitor) = &self.monitor {
+            for chunk in monitor.poll_audio() {
+                if let Err(error) = session.push_audio(chunk) { self.call_notice = Some(error); self.stop_call(); return; }
+            }
+        }
+        let result = session.tick();
+        self.call_transcript = session.transcript.clone(); self.call_suggestion = session.suggestion.clone();
+        if let Some(notice) = &session.notice { self.call_notice = Some(notice.clone()); }
+        if let Err(error) = result { self.call_notice = Some(error); self.stop_call(); }
+    }
+
+    fn stop_call(&mut self) {
+        // Revoke audio first, before waiting for IPC/STT cleanup.
+        if let Some(monitor) = &self.monitor { monitor.stop_capture(); }
+        if let Some(mut session) = self.call_session.take() {
+            session.stop(); self.call_transcript = std::mem::take(&mut session.transcript);
+            self.call_suggestion = std::mem::take(&mut session.suggestion);
+        }
     }
 
     fn render(&mut self) {
@@ -402,6 +486,7 @@ impl Assistant {
 
 impl Drop for Assistant {
     fn drop(&mut self) {
+        self.stop_call();
         self.server_start = None;
         self.bridge = None; self.metrics = None; self.monitor = None;
         self.overlays.shutdown();
@@ -442,6 +527,27 @@ mod tests {
         let assistant = Assistant::new(); let call = assistant.call_view();
         assert!(!call.visible); assert!(!call.can_listen); assert!(!call.listening);
         assert!(assistant.bridge.is_none()); assert!(assistant.monitor.is_none());
+    }
+    #[test]
+    fn every_capture_phase_keeps_the_indicator_visible_even_without_candidates() {
+        let mut assistant = Assistant::new(); assistant.config.call_panel = true;
+        assistant.manual_call = false;
+        for phase in [crate::call_audio::CapturePhase::Starting, crate::call_audio::CapturePhase::Listening, crate::call_audio::CapturePhase::Stopping] {
+            assistant.audio = Some(AudioSnapshot { capture: Some(crate::call_audio::CaptureStatus {
+                generation: 1, key: 2, label: "Synthetic call".into(), pid: 42, state: phase,
+            }), ..Default::default() });
+            let view = assistant.call_view();
+            assert!(view.visible); assert!(view.listening); assert!(!view.can_listen);
+        }
+    }
+    #[test]
+    fn stop_retains_the_transcript_panel_and_close_hides_it() {
+        let mut assistant = Assistant::new(); assistant.config.call_panel = true;
+        assistant.call_transcript = "Synthetic transcript".into();
+        assistant.action(OverlayAction::StopCall).unwrap();
+        let view = assistant.call_view(); assert!(view.visible); assert!(!view.listening);
+        assert_eq!(view.transcript,"Synthetic transcript");
+        assistant.action(OverlayAction::CloseCall).unwrap(); assert!(!assistant.call_view().visible);
     }
     #[test]
     fn only_exact_thread_identifiers_become_deep_links() {

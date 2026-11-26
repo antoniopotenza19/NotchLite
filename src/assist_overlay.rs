@@ -49,6 +49,9 @@ const CALL_SUGGESTION: i32 = 205;
 const CONFIRM: i32 = 206;
 const DECLINE: i32 = 207;
 const STOP: i32 = 208;
+const CALL_CONTEXT: i32 = 209;
+const CALL_CONTEXT_LABEL: i32 = 210;
+const CONFIRM_AI: i32 = 211;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OverlayConfig {
@@ -85,7 +88,7 @@ pub enum OverlayAction {
     AnswerQuestion { key: AnswerKey, answers: BTreeMap<String, Vec<String>> },
     OpenCodex { thread_id: String }, Refresh, ShowCallPanel,
     StartSharedServer, CreateThread { workspace: String },
-    ConfirmCall { candidate_key: u64 }, DeclineCall { candidate_key: u64 }, StopCall,
+    ConfirmCall { candidate_key: u64, context: String, with_ai: bool }, DeclineCall { candidate_key: u64 }, StopCall,
     SelectCallTarget { target_key: u64 }, CloseDashboard, CloseCall,
 }
 
@@ -197,6 +200,9 @@ impl OverlayManager {
         self.prune_closed();
         self.call_view = bounded_call(view);
         if !self.call_view.visible {
+            // A completed/dismissed occurrence must not suppress a later call
+            // that reuses the same process and WASAPI session identity.
+            self.suppressed_call = None;
             if self.call_view.listening { self.enqueue(OverlayAction::StopCall); }
             self.call = None;
         } else if self.suppressed_call != Some(self.call_view.candidate_key) && self.call.is_none() {
@@ -453,8 +459,11 @@ fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
     } else {
         for id in [CALL_STATUS, CALL_SCOPE, CALL_PROVIDER] { child(id, w!("STATIC"), "", 0, false)?; }
         child(CALL_TARGET, w!("COMBOBOX"), "", (CBS_DROPDOWNLIST | CBS_HASSTRINGS) as u32 | WS_VSCROLL.0, true)?;
+        child(CALL_CONTEXT_LABEL, w!("STATIC"), "Obiettivo per l'AI (facoltativo)", 0, false)?;
+        child(CALL_CONTEXT, w!("EDIT"), "", ES_AUTOHSCROLL as u32, true)?;
+        unsafe { SendMessageW(state.control(CALL_CONTEXT), EM_SETLIMITTEXT, WPARAM(1000), LPARAM(0)); }
         for id in [CALL_TRANSCRIPT, CALL_SUGGESTION] { child(id, w!("EDIT"), "", (ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY) as u32 | WS_VSCROLL.0, true)?; }
-        for (id, label) in [(CONFIRM, "Confirm"), (DECLINE, "Decline"), (STOP, "Stop")] { child(id, w!("BUTTON"), label, 0, true)?; }
+        for (id, label) in [(CONFIRM, "Trascrivi"), (CONFIRM_AI, "Trascrivi + AI"), (DECLINE, "Ignora"), (STOP, "Stop")] { child(id, w!("BUTTON"), label, 0, true)?; }
     }
     layout_controls(hwnd, state);
     Ok(())
@@ -521,13 +530,17 @@ fn layout_controls(hwnd: HWND, state: &WindowState) {
             place(id, margin, y, width, px(height)); y += px(height) + gap;
         }
         place(CALL_TARGET, margin, y, width, px(220)); y += px(32);
+        place(CALL_CONTEXT_LABEL, margin, y, width, px(20)); y += px(20);
+        place(CALL_CONTEXT, margin, y, width, px(24)); y += px(28);
         let buttons_y = client.bottom - margin - px(28);
-        let available = (buttons_y - y - gap * 2).max(2);
+        let mode_y = buttons_y - gap - px(28);
+        let available = (mode_y - y - gap * 2).max(2);
         let first = available / 2;
         place(CALL_TRANSCRIPT, margin, y, width, first);
         place(CALL_SUGGESTION, margin, y + first + gap, width, (available - first).max(1));
-        let button_w = ((width - gap * 2) / 3).max(1);
-        for (i, id) in [CONFIRM, DECLINE, STOP].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, buttons_y, button_w, px(28)); }
+        let button_w = ((width - gap) / 2).max(1);
+        for (i, id) in [CONFIRM, CONFIRM_AI].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, mode_y, button_w, px(28)); }
+        for (i, id) in [DECLINE, STOP].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, buttons_y, button_w, px(28)); }
     }
     state.updating.set(was_updating);
 }
@@ -611,9 +624,11 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
         combo_items(state.control(CALL_TARGET), view.candidates.iter().map(|v| v.label.clone()), view.candidates.iter().position(|v| Some(v.key) == view.candidate_key));
     }
     enabled(state.control(CALL_TARGET), !view.listening && !view.candidates.is_empty());
+    enabled(state.control(CALL_CONTEXT), !view.listening);
     if previous.transcript != view.transcript { readonly_text(state.control(CALL_TRANSCRIPT), &view.transcript); }
     if previous.suggestion != view.suggestion { readonly_text(state.control(CALL_SUGGESTION), &view.suggestion); }
     enabled(state.control(CONFIRM), view.can_listen && !view.listening && view.candidate_key.is_some());
+    enabled(state.control(CONFIRM_AI), view.can_listen && !view.listening && view.candidate_key.is_some());
     enabled(state.control(DECLINE), !view.listening && view.candidate_key.is_some());
     state.content.replace(Content::Call(view.clone()));
     state.initialized.set(true);
@@ -624,7 +639,7 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
 
 fn call_action(view: &CallView, id: i32) -> Option<OverlayAction> {
     match id {
-        CONFIRM if view.can_listen && !view.listening => view.candidate_key.map(|candidate_key| OverlayAction::ConfirmCall { candidate_key }),
+        CONFIRM | CONFIRM_AI if view.can_listen && !view.listening => view.candidate_key.map(|candidate_key| OverlayAction::ConfirmCall { candidate_key, context: String::new(), with_ai: id == CONFIRM_AI }),
         DECLINE if !view.listening => view.candidate_key.map(|candidate_key| OverlayAction::DeclineCall { candidate_key }),
         STOP => Some(OverlayAction::StopCall),
         _ => None,
@@ -678,7 +693,13 @@ fn command(state: &WindowState, id: i32, notification: u32) {
             if id == CALL_TARGET && notification == CBN_SELCHANGE && !view.listening {
                 let index = unsafe { SendMessageW(state.control(CALL_TARGET), CB_GETCURSEL, WPARAM(0), LPARAM(0)).0 };
                 if let Some(target) = usize::try_from(index).ok().and_then(|i| view.candidates.get(i)) { state.queue.push(OverlayAction::SelectCallTarget { target_key: target.key }); }
-            } else if notification == BN_CLICKED { if let Some(action) = call_action(view, id) { state.queue.push(action); } }
+            } else if notification == BN_CLICKED { if let Some(mut action) = call_action(view, id) {
+                if let OverlayAction::ConfirmCall { context, .. } = &mut action {
+                    let Some(value) = text(state.control(CALL_CONTEXT), 1000) else { return; };
+                    *context = value;
+                }
+                state.queue.push(action);
+            } }
         }
     }
 }
@@ -750,7 +771,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
             if id == STATUS { if let Ok(content) = state.content.try_borrow() { if let Content::Dashboard(view) = &*content {
                 if let Some(row) = view.rows.iter().find(|r| Some(&r.id) == view.selected_id.as_ref()) { ink = attention_color(row, ink); }
             } } }
-            if id == CALL_STATUS { if let Ok(content) = state.content.try_borrow() { if let Content::Call(view) = &*content { if view.listening { ink = resources.accent; } } } }
+            if id == CALL_STATUS { if let Ok(content) = state.content.try_borrow() { if let Content::Call(view) = &*content { if view.listening { ink = COLORREF(0x005858FF); } } } }
             SetTextColor(dc, ink); SetBkColor(dc, if is_input { resources.input_bg } else { resources.bg });
             return LRESULT(if is_input { resources.input.0 } else { resources.background.0 } as isize);
         }
@@ -777,7 +798,7 @@ mod tests {
     #[test]
     fn stop_is_never_dropped_and_removes_queued_call_start_actions() {
         let queue = ActionQueue { actions: RefCell::new(VecDeque::new()), wake: Cell::new(HWND::default()) };
-        queue.push(OverlayAction::ConfirmCall { candidate_key: 1 });
+        queue.push(OverlayAction::ConfirmCall { candidate_key: 1, context: String::new(), with_ai: true });
         while queue.actions.borrow().len() < MAX_ACTIONS { queue.push(OverlayAction::Refresh); }
         assert!(!queue.push(OverlayAction::SelectThread("overflow".into())));
         assert!(queue.push(OverlayAction::StopCall));
@@ -801,9 +822,20 @@ mod tests {
         let mut view = CallView { candidate_key: Some(42), ..Default::default() };
         assert!(call_action(&view, CONFIRM).is_none());
         view.can_listen = true;
-        assert_eq!(call_action(&view, CONFIRM), Some(OverlayAction::ConfirmCall { candidate_key: 42 }));
+        assert_eq!(call_action(&view, CONFIRM), Some(OverlayAction::ConfirmCall { candidate_key: 42, context: String::new(), with_ai: false }));
+        assert_eq!(call_action(&view, CONFIRM_AI), Some(OverlayAction::ConfirmCall { candidate_key: 42, context: String::new(), with_ai: true }));
         view.listening = true; assert!(call_action(&view, CONFIRM).is_none());
         assert_eq!(call_action(&view, STOP), Some(OverlayAction::StopCall));
+    }
+    #[test]
+    fn an_invisible_interval_rearms_a_later_call_with_the_same_identity() {
+        let mut manager = OverlayManager::new(); manager.config.call_panel = true;
+        manager.suppressed_call = Some(Some(7));
+        manager.apply_call(CallView { visible: false, candidate_key: Some(7), ..Default::default() });
+        assert!(manager.suppressed_call.is_none());
+        take_topology_dirty();
+        manager.apply_call(CallView { visible: true, candidate_key: Some(7), ..Default::default() });
+        assert!(take_topology_dirty());
     }
     #[test]
     fn readonly_content_is_bounded_and_keeps_the_selected_chat_visible() {

@@ -7,6 +7,9 @@ mod assist_layout;
 mod assist_metrics;
 mod assist_overlay;
 mod call_audio;
+mod call_stt;
+mod call_session;
+mod call_coach;
 mod codex_bridge;
 mod codex_server;
 mod codex_diagnostic;
@@ -32,6 +35,15 @@ use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if call_coach::run_diagnostic()? { return Ok(()); }
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|a| a == "--call-transcription-check") {
+        if args.len() < 2 || args.len() > 3 { return Err("Usa --call-transcription-check <wav PCM16 mono 16kHz, max 8s> [lingua]".into()); }
+        let language = args.get(2).map(|v| v.to_string_lossy().into_owned()).unwrap_or_else(|| "it".into());
+        let result = call_stt::check_file(std::path::Path::new(&args[1]), &language)?;
+        println!("{}", serde_json::json!({"text":result.text,"samples":result.samples,"elapsedMillis":result.elapsed_millis,"audioCapture":false,"guiOpened":false}));
+        return Ok(());
+    }
     if codex_diagnostic::run()? { return Ok(()); }
     if std::env::args_os().skip(1).any(|arg| arg == "--codex-check") {
         // Metadata-only diagnostics before settings, COM, mutex or window creation.

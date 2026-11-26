@@ -38,8 +38,10 @@ jobs:
           Copy-Item docs/COMPANION.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-DASHBOARD.md,docs/CALL-ASSISTANT.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-SHARED-SERVER.md artifact/NotchLite-portatile
+          Copy-Item docs/CALL-LIVE.md,docs/CALL-TRANSCRIPTION.md artifact/NotchLite-portatile
           New-Item -ItemType Directory artifact/NotchLite-portatile/tools | Out-Null
           Copy-Item tools/Setup-CodexSharedServer.ps1 artifact/NotchLite-portatile/tools
+          Copy-Item tools/Setup-CallTranscription.ps1 artifact/NotchLite-portatile/tools
           Copy-Item licenses -Recurse artifact/NotchLite-portatile/licenses
           New-Item -ItemType Directory -Force artifact/NotchLite-portatile/assets | Out-Null
           Copy-Item docs/assets/navigation-preview.png artifact/NotchLite-portatile/assets

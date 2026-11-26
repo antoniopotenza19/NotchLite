@@ -28,14 +28,14 @@
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 107,
+    "rust_tests_passed": 131,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "Headless real shared-server test only; native GUI not opened. Existing embedded Desktop conversations remain separate.",
+    "visual_test_limitation": "No GUI or real audio capture; public WAV STT and active-assistant text IPC tested headlessly.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-8/VALIDATION.json",
+    "review_validation": "docs/review/iteration-9/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
@@ -43,9 +43,15 @@
     "phone_pairing_real_device_tested": false,
     "cross_platform_ci": null,
     "codex_gui_chats_connected": false,
-    "audio_ai_enabled": false,
     "cli_diagnostic_run": true,
-    "codex_live_daemon_tested": true
+    "codex_live_daemon_tested": true,
+    "local_call_transcription_implemented": true,
+    "local_call_transcription_file_tested": true,
+    "call_capture_implemented": true,
+    "call_capture_live_tested": false,
+    "active_chat_text_bridge_tested": true,
+    "cloud_audio_api_enabled": false,
+    "call_ai_text_bridge_available": true
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -109,8 +115,8 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "139df501535225d6e193924272a697902d1e47b288520e3458d3d010a0511a53",
-    "bytes": 2217984
+    "sha256": "96cb6d39c1c083c8db41f609efd58bc9b2d2267903e5714e06c2db49d39d5598",
+    "bytes": 2332160
   },
   "new_source_files": [
     "src/assist.rs",
@@ -118,7 +124,11 @@
     "src/assist_metrics.rs",
     "src/assist_overlay.rs",
     "src/call_audio.rs",
+    "src/call_audio/capture.rs",
     "src/call_audio/windows.rs",
+    "src/call_coach.rs",
+    "src/call_session.rs",
+    "src/call_stt.rs",
     "src/codex_bridge.rs",
     "src/codex_bridge/protocol.rs",
     "src/codex_bridge/transport.rs",
@@ -137,7 +147,7 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.7",
+  "version": "0.1.8",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",
@@ -150,5 +160,13 @@
     "asset": "codex-package-x86_64-pc-windows-msvc.tar.gz",
     "sha256": "6d3be3ea2e3f759f77f23b543ee882aae6433dc6a6cd260788c2e8793d616eac",
     "redistributed": false
+  },
+  "external_call_transcription": {
+    "project": "https://github.com/ggml-org/whisper.cpp",
+    "version": "1.9.2",
+    "model": "ggml-tiny-q5_1.bin",
+    "license": "MIT",
+    "runtime_or_model_redistributed_in_portable": false,
+    "setup": "tools/Setup-CallTranscription.ps1"
   }
 }

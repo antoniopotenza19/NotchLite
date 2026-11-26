@@ -38,7 +38,7 @@ pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) ->
     let available_h = i64::from(work.bottom) - i64::from(work.top) - margin * 2;
     let min_dashboard_w = px(320).max(1);
     let min_call_w = px(300).max(1);
-    if available_h < if dashboard { px(520) } else { px(340) } {
+    if available_h < if dashboard { px(520) } else { px(440) } {
         return Err(PlacementError::InsufficientSpace);
     }
     let (dashboard_w, call_w) = match (dashboard, call) {

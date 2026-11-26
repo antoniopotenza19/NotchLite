@@ -118,7 +118,7 @@ impl SettingsPage {
         rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
         rows.push(Row { label: "Phone link (LAN)", kind: Kind::Flag { key: pages::PHONE_KEY, default_on: false } });
         rows.push(Row { label: "Codex dashboard", kind: Kind::Flag { key: crate::assist::DASHBOARD_KEY, default_on: false } });
-        rows.push(Row { label: "Call panel (no audio)", kind: Kind::Flag { key: crate::assist::CALL_KEY, default_on: false } });
+        rows.push(Row { label: "Call assistant", kind: Kind::Flag { key: crate::assist::CALL_KEY, default_on: false } });
         rows.push(Row { label: "Assistant monitor", kind: Kind::AssistantMonitor });
         for &(id, label) in pages::FEATURES {
             rows.push(Row { label, kind: Kind::Feature(id) });
