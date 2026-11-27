@@ -79,3 +79,7 @@ DIP size persistence. Upstream attribution and other notices retained.
 NotchLite 0.1.12 (2026-11-27): explicit optional CPU/Vulkan ASR profiles,
 bounded GPU startup metadata verification, pinned Turbo/Small setup and
 actual session/provider labels. No Whisper code linked into the app.
+
+NotchLite 0.1.13 (2026-11-27): dedicated call reader/configuration views,
+optional documented DWM glass frame, explicit Teams render-owner refresh
+and bounded audio/transcription diagnostics. No external chat code imported.

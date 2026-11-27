@@ -88,17 +88,50 @@ pub fn overlay_rects_sized(work: ScreenRect, dpi: u32, dashboard: bool, call: bo
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct CallBodyRects {
+pub struct CallControlsRects {
     /// Status, scope, provider, target dropdown, context label, context input.
     pub information: [ScreenRect; 6],
-    pub labels: [ScreenRect; 2],
-    pub editors: [ScreenRect; 2],
+    pub resize: ScreenRect,
     /// Transcript action, AI action, ignore, stop.
     pub buttons: [ScreenRect; 4],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallReaderRects {
+    pub status: ScreenRect,
+    pub labels: [ScreenRect; 2],
+    pub editors: [ScreenRect; 2],
+    /// Resize and Stop remain available without opening configuration.
+    pub buttons: [ScreenRect; 2],
+}
+
+/// Reading view: the setup form never takes space from the two live text panes.
+pub fn call_reader_rects(width: i32, height: i32, dpi: u32) -> Result<CallReaderRects, PlacementError> {
+    if width <= 0 || height <= 0 || dpi == 0 { return Err(PlacementError::InvalidGeometry); }
+    let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96).max(1);
+    let margin=px(12); let gap=px(8); let content_width=i64::from(width)-margin*2;
+    let rect=|left:i64,top:i64,w:i64,h:i64|->Result<ScreenRect,PlacementError>{
+        if w<=0 || h<=0 {return Err(PlacementError::InsufficientSpace);}
+        Ok(ScreenRect{left:left.try_into().map_err(|_|PlacementError::InvalidGeometry)?,top:top.try_into().map_err(|_|PlacementError::InvalidGeometry)?,
+            right:(left+w).try_into().map_err(|_|PlacementError::InvalidGeometry)?,bottom:(top+h).try_into().map_err(|_|PlacementError::InvalidGeometry)?})
+    };
+    let status=rect(margin,margin+px(28),content_width,px(48))?;
+    let mut y=i64::from(status.bottom)+gap;
+    let buttons_y=i64::from(height)-margin-px(28);
+    let label_height=px(20);
+    let editor_space=buttons_y-y-label_height*2-gap*5;
+    let first=editor_space*3/5;let second=editor_space-first;
+    if first<px(48) || second<px(48) || content_width<px(180) {return Err(PlacementError::InsufficientSpace);}
+    let transcript_label=rect(margin,y,content_width,label_height)?;y+=label_height+gap;
+    let transcript=rect(margin,y,content_width,first)?;y+=first+gap*2;
+    let suggestion_label=rect(margin,y,content_width,label_height)?;y+=label_height+gap;
+    let suggestion=rect(margin,y,content_width,second)?;
+    Ok(CallReaderRects{status,labels:[transcript_label,suggestion_label],editors:[transcript,suggestion],
+        buttons:[rect(margin,buttons_y,px(96),px(28))?,rect(i64::from(width)-margin-px(76),buttons_y,px(76),px(28))?]})
+}
+
 /// Native client geometry shared by rendering and tests; the header occupies 28 DIP.
-pub fn call_body_rects(width: i32, height: i32, dpi: u32) -> Result<CallBodyRects, PlacementError> {
+pub fn call_controls_rects(width: i32, height: i32, dpi: u32) -> Result<CallControlsRects, PlacementError> {
     if width <= 0 || height <= 0 || dpi == 0 { return Err(PlacementError::InvalidGeometry); }
     let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96).max(1);
     let margin = px(12); let gap = px(4);
@@ -114,26 +147,15 @@ pub fn call_body_rects(width: i32, height: i32, dpi: u32) -> Result<CallBodyRect
     };
     let mut y = margin + px(28);
     let mut information = [ScreenRect { left: 0, top: 0, right: 0, bottom: 0 }; 6];
-    for (i, (control_height, advance)) in [(36, 40), (40, 44), (62, 66), (28, 32), (20, 20), (24, 28)].into_iter().enumerate() {
+    for (i, (control_height, advance)) in [(48, 52), (40, 44), (120, 124), (28, 32), (20, 20), (24, 28)].into_iter().enumerate() {
         information[i] = rect(margin, y, content_width, px(control_height))?;
         y += px(advance);
     }
     let buttons_y = i64::from(height) - margin - px(28);
     let mode_y = buttons_y - gap - px(28);
-    let label_height = px(20);
-    let editor_space = mode_y - y - label_height * 2 - gap * 4;
-    // Reserve an editor height budget; native font metrics still need UI validation.
-    let transcript_height = if editor_space < px(180) { editor_space / 2 } else { editor_space * 3 / 5 };
-    let suggestion_height = editor_space - transcript_height;
-    if transcript_height < px(36) || suggestion_height < px(36) { return Err(PlacementError::InsufficientSpace); }
-    let transcript_label = rect(margin, y, content_width, label_height)?;
-    y += label_height + gap;
-    let transcript = rect(margin, y, content_width, transcript_height)?;
-    y += transcript_height + gap;
-    let suggestion_label = rect(margin, y, content_width, label_height)?;
-    y += label_height + gap;
-    let suggestion = rect(margin, y, content_width, suggestion_height)?;
-    Ok(CallBodyRects { information, labels: [transcript_label, suggestion_label], editors: [transcript, suggestion],
+    let resize=rect(margin,y+px(8),px(96),px(28))?;
+    if i64::from(resize.bottom)+px(8)>mode_y || content_width<px(180) {return Err(PlacementError::InsufficientSpace);}
+    Ok(CallControlsRects { information, resize,
         buttons: [rect(margin, mode_y, button_width, px(28))?, rect(margin + button_width + gap, mode_y, button_width, px(28))?,
             rect(margin, buttons_y, button_width, px(28))?, rect(margin + button_width + gap, buttons_y, button_width, px(28))?] })
 }
@@ -242,34 +264,30 @@ mod tests {
         assert!(work_below_main(extreme, ScreenRect { bottom: i32::MIN + 190, ..extreme }).is_ok());
     }
     #[test]
-    fn call_controls_keep_labels_editors_and_actions_separate_at_minimum_and_portrait_sizes() {
+    fn call_controls_keep_diagnostics_context_and_consent_separate_at_minimum_and_portrait_sizes() {
         for dpi in [96, 120, 144, 192] {
             let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96) as i32;
             for height in [px(480), px(480) - 2, px(720), px(720) - 2] {
                 // The custom call frame has a full client; retain a conservative 2px regression case.
                 let width = px(300) - 2;
-                let body = call_body_rects(width, height, dpi).unwrap();
+                let body = call_controls_rects(width, height, dpi).unwrap();
                 let mut bottom = px(12) + px(28);
                 for rect in body.information {
                     assert!(rect.top >= bottom);
                     assert!(rect.left >= px(12) && rect.right <= width - px(12));
                     bottom = rect.bottom;
                 }
-                for i in 0..2 {
-                    assert!(body.labels[i].top >= bottom);
-                    assert!(body.labels[i].bottom < body.editors[i].top);
-                    assert!(body.editors[i].height() >= px(36));
-                    bottom = body.editors[i].bottom;
-                }
-                assert!(bottom < body.buttons[0].top);
+                assert!(body.information[2].height()>=px(120));
+                assert!(bottom<body.resize.top);
+                assert!(body.resize.bottom<body.buttons[0].top);
                 assert!(body.buttons[0].right < body.buttons[1].left);
                 assert!(body.buttons[0].bottom < body.buttons[2].top);
                 assert!(body.buttons[2].right < body.buttons[3].left);
                 assert!(body.buttons[3].bottom <= height - px(12));
             }
         }
-        assert_eq!(call_body_rects(300, 350, 96), Err(PlacementError::InsufficientSpace));
-        assert_eq!(call_body_rects(300, 480, 0), Err(PlacementError::InvalidGeometry));
+        assert_eq!(call_controls_rects(300, 350, 96), Err(PlacementError::InsufficientSpace));
+        assert_eq!(call_controls_rects(300, 480, 0), Err(PlacementError::InvalidGeometry));
     }
     #[test]
     fn live_text_follows_only_a_view_already_at_the_end() {
@@ -280,6 +298,31 @@ mod tests {
         assert!(!scroll_is_at_end(0, 100, 0, 99));
         assert!(scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN + 1));
         assert!(!scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN));
+    }
+    #[test]
+    fn call_reader_gives_live_text_the_space_instead_of_the_hidden_setup_form() {
+        for dpi in [96,120,144,192] {
+            let px=|dip:i64|((dip*i64::from(dpi)+48)/96) as i32;
+            for height in [px(480)-2,px(720),px(900)] {
+                let width=px(300)-2;
+                let reader=call_reader_rects(width,height,dpi).unwrap();
+                let setup=call_controls_rects(width,height,dpi).unwrap();
+                assert!(reader.editors[0].top<setup.information[2].bottom);
+                assert!(reader.editors[0].height()+reader.editors[1].height()>=px(240));
+                assert!(reader.status.bottom<reader.labels[0].top);
+                for i in 0..2 {
+                    assert!(reader.labels[i].bottom<reader.editors[i].top);
+                    assert!(reader.editors[i].left>=px(12)&&reader.editors[i].right<=width-px(12));
+                }
+                assert!(reader.editors[0].bottom<reader.labels[1].top);
+                assert!(reader.editors[1].bottom<reader.buttons[0].top);
+                assert!(reader.buttons[0].right<reader.buttons[1].left);
+                assert!(reader.buttons[1].bottom<=height-px(12));
+            }
+        }
+        assert!(call_reader_rects(180,480,96).is_err());
+        assert!(call_reader_rects(300,240,96).is_err());
+        assert!(call_reader_rects(300,480,0).is_err());
     }
     #[test]
     fn enlarged_call_reflows_dashboard_and_keeps_top_right_anchor_at_each_dpi() {

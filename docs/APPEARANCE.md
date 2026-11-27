@@ -38,3 +38,7 @@ La 0.1.11 coordina pulsanti call, editor, etichette e selezione della notch con 
 Nel pannello call, **Ingrandisci** propone 640×900 DIP e **Compatto** 420×720 DIP, limitati allo spazio disponibile. Il bordo sinistro, quello inferiore e l’angolo inferiore sinistro permettono misure personalizzate. La finestra resta ancorata in alto a destra sotto la notch; con la dashboard aperta le lascia almeno 320 DIP. Le dimensioni sono conservate in call-panel-size.json e vengono salvate solo a fine gesto o su azione esplicita, senza ricaricare i moduli. Un errore mostra **Non salvato** e permette di riprovare.
 
 Geometria, contrasto e compilazione sono verificati separatamente da resa visiva, focus, trascinamento reale e ridimensionamento durante una call. Il registro corrente è [iteration-12/VALIDATION.json](review/iteration-12/VALIDATION.json).
+
+## Pannello call 0.1.13
+
+Lettura e Controlli separano i testi dal modulo di configurazione. Con Graphite la cornice può usare Acrylic DWM nativo (Windows 11 22621+, composizione e trasparenza attive, senza contrasto elevato o risparmio energetico). Il corpo sotto il testo resta opaco; non viene applicata trasparenza all’intera finestra. Il fallback è grafite. Nessun nuovo timer, worker o dipendenza. Una richiesta DWM accettata non dimostra il blur effettivo: la resa visiva resta da collaudare senza usare il desktop.

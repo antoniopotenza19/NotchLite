@@ -1,6 +1,6 @@
 # Provare NotchLite
 
-La preview 0.1.12 include **Settings > Codex dashboard** e **Call assistant**, entrambi spenti inizialmente. I pannelli sono ancorati al secondario, rispettivamente in alto a sinistra e a destra. Con più secondari usa **Assistant monitor**; senza un secondario valido non ripiegano sul primario.
+La preview 0.1.13 include **Settings > Codex dashboard** e **Call assistant**, entrambi spenti inizialmente. I pannelli sono ancorati al secondario, rispettivamente in alto a sinistra e a destra. Con più secondari usa **Assistant monitor**; senza un secondario valido non ripiegano sul primario.
 
 Il bridge si collega a un daemon Codex locale condiviso, usando l'accesso ChatGPT del CLI ufficiale. Sul PC di sviluppo il server è già stato preparato. Nel pannello puoi inserire la cartella del progetto, premere **Nuova chat** e poi **Send**; le nuove chat partono in sola lettura. **Avvia server locale** serve quando il pacchetto ufficiale completo è installato ma il server è spento. Per un altro PC: [preparazione del server](CODEX-SHARED-SERVER.md).
 
@@ -37,3 +37,5 @@ I dati utente restano in %APPDATA%/NotchLite e %LOCALAPPDATA%/NotchLite; il pacc
 Nel pannello call premi **Ingrandisci** per la modalità ampia o **Compatto** per quella standard. Trascina il bordo sinistro, inferiore o l’angolo inferiore sinistro per una misura personalizzata. Le dimensioni vengono salvate alla fine del gesto, senza interrompere i moduli. Sono limitate allo spazio sotto la notch e lasciano spazio alla dashboard quando aperta. **Non salvato** indica un errore di persistenza: premi il pulsante per riprovare.
 
 Trascrizione 0.1.12: il setup propone Small CPU; per la GPU usa `tools/Setup-CallTranscription.ps1 -Model turbo -Backend vulkan -Device 0 -Threads 4`. Verifica il device sul tuo PC. Il setup non ascolta: Stop e nuova conferma applicano il profilo. Il pannello mostra il profilo della sessione e il modello AI restituito dal server. Leggi CALL-TRANSCRIPTION.md per provenienza, risorse e limiti.
+
+Pannello call 0.1.13: la vista Lettura è dedicata a trascrizione e suggerimenti. Premi Controlli per scegliere sorgente, contesto e Trascrivi/Trascrivi + AI. La conferma riporta alla lettura; Stop rimane disponibile. La cornice glass richiede Windows 11 compatibile e trasparenza attiva; il testo resta opaco. In caso di testo assente vedi TEAMS-DIAGNOSTICS.md: nessuna call Teams reale è stata usata nelle prove.

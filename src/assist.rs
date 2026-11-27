@@ -64,6 +64,7 @@ pub struct Assistant {
     resources: ResourceSnapshot,
     monitor: Option<AudioMonitor>,
     monitor_attempted: bool,
+    monitor_error: Option<String>,
     audio: Option<AudioSnapshot>,
     call_session: Option<crate::call_session::CallSession>,
     call_transcript: String,
@@ -89,7 +90,7 @@ impl Assistant {
             socket: None, bridge: None, bridge_attempted: false,
             cli: None, server_start: None, workspace: String::new(),
             codex: Snapshot::unavailable("Pannello chat disattivato"), metrics: None, resources: ResourceSnapshot::default(),
-            monitor: None, monitor_attempted: false, audio: None,
+            monitor: None, monitor_attempted: false, monitor_error: None, audio: None,
             call_session: None, call_transcript: String::new(), call_suggestion: String::new(), call_notice: None,
             selected_thread: None, selected_target: None, attention: BTreeMap::new(), manual_call: false,
             observed_created_thread: None,
@@ -191,11 +192,11 @@ impl Assistant {
             if !self.monitor_attempted {
                 self.monitor_attempted = true;
                 match AudioMonitor::start() {
-                    Ok(monitor) => self.monitor = Some(monitor),
-                    Err(error) => self.note = Some(error),
+                    Ok(monitor) => { self.monitor_error=None; self.monitor=Some(monitor); }
+                    Err(error) => { self.monitor_error=Some(error.clone()); self.note=Some(error); }
                 }
             }
-        } else { self.stop_call(); self.monitor = None; self.audio = None; }
+        } else { self.stop_call(); self.monitor = None; self.monitor_error=None; self.audio = None; }
     }
 
     pub fn display_changed(&mut self) {
@@ -425,7 +426,7 @@ impl Assistant {
             provider: "Scegli Trascrivi oppure Trascrivi + AI · audio elaborato localmente".into(),
             can_listen: self.monitor.is_some() && capture.is_none() && self.call_session.is_none(),
             listening: capture.is_some(), candidate_key: candidate.map(|c| c.key), ..Default::default() };
-        view.status = if suggested.is_some() { "Possibile chiamata rilevata" } else { "In attesa di una chiamata · solo metadati" }.into();
+        view.status = if suggested.is_some() { "Possibile chiamata · apri Controlli per avviare" } else { "In attesa · apri Controlli per avviare" }.into();
         view.scope = candidate.map(|c| format!("{} (PID {}) · audio dell'app e processi figli, non una singola scheda.", c.label, c.pid))
             .unwrap_or_else(|| "Nessun ascolto: la rilevazione usa soltanto metadati delle sessioni audio.".into());
         if let Some(audio) = &self.audio {
@@ -434,9 +435,9 @@ impl Assistant {
         }
         if let Some(capture) = capture {
             view.status = match capture.state {
-                crate::call_audio::CapturePhase::Starting => "Avvio ascolto…",
-                crate::call_audio::CapturePhase::Listening => "Ascolto attivo · Stop interrompe la sessione",
-                crate::call_audio::CapturePhase::Stopping => "Arresto ascolto…",
+                crate::call_audio::CapturePhase::Starting => "Collegamento audio…",
+                crate::call_audio::CapturePhase::Listening => "Trascrizione attiva",
+                crate::call_audio::CapturePhase::Stopping => "Arresto in corso…",
             }.into();
             view.scope = format!("{} · audio dell'app e processi figli; può includere più schede.", capture.label);
             let profile=self.call_session.as_ref().map(|s|s.profile_label()).unwrap_or("Trascrizione locale");
@@ -445,13 +446,29 @@ impl Assistant {
                     .map(|status|format!("{profile}\n{status}"))
                     .unwrap_or_else(||format!("{profile}\nAI in preparazione"))
             } else { format!("{profile}\nSolo trascrizione · AI spenta") };
+            if let Some(session)=&self.call_session {
+                view.provider.push('\n');view.provider.push_str(&session.progress_label());
+            }
+            if let Some(warning)=self.audio.as_ref().and_then(|audio|audio.input_health.warning()) {
+                view.status.push_str(" · ");view.status.push_str(warning);
+            }
         }
         if let Some(notice) = &self.call_notice { view.status.push_str(" · "); view.status.push_str(notice); }
-        view.transcript = if self.call_transcript.is_empty() { "La trascrizione comparirà qui dopo l'avvio e una frase pronunciata.".into() } else { self.call_transcript.clone() };
+        if let Some(error)=&self.monitor_error {view.status.push_str(" · ");view.status.push_str(error);}
+        view.transcript = if self.call_transcript.is_empty() {
+            if capture.is_some() {
+                self.audio.as_ref().and_then(|audio|audio.input_health.warning())
+                    .or_else(||self.call_session.as_ref().and_then(|session|session.reader_feedback()))
+                    .unwrap_or("In attesa della prima frase…")
+            } else {
+                self.monitor_error.as_deref().or(self.call_notice.as_deref()).or_else(||self.audio.as_ref().and_then(|audio|audio.last_error.as_deref()))
+                    .unwrap_or("Nessuna trascrizione")
+            }.into()
+        } else { self.call_transcript.clone() };
         view.suggestion = if self.call_suggestion.is_empty() {
             if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
-                "I suggerimenti compariranno automaticamente dopo una frase trascritta. Il testo viene inviato al tuo server Codex e usa i limiti dell'abbonamento. Stato ed eventuali errori sono indicati sopra.".into()
-            } else { "Modalità solo trascrizione. Per i suggerimenti termina questa sessione e scegli Trascrivi + AI.".into() }
+                self.call_session.as_ref().and_then(|s|s.ai_feedback()).unwrap_or_else(||"In attesa di una frase trascritta…".into())
+            } else { "Suggerimenti AI disattivati".into() }
         } else { self.call_suggestion.clone() };
         view
     }
@@ -573,6 +590,23 @@ mod tests {
         let view = assistant.call_view(); assert!(view.visible); assert!(!view.listening);
         assert_eq!(view.transcript,"Synthetic transcript");
         assistant.action(OverlayAction::CloseCall).unwrap(); assert!(!assistant.call_view().visible);
+    }
+    #[test]
+    fn empty_reader_explains_a_failed_capture_without_opening_controls() {
+        let mut assistant=Assistant::new();assistant.config.call_panel=true;assistant.manual_call=true;
+        assistant.audio=Some(AudioSnapshot{last_error:Some("Synthetic audio activation failure".into()),..Default::default()});
+        let view=assistant.call_view();assert!(view.visible&&!view.listening);
+        assert_eq!(view.transcript,"Synthetic audio activation failure");
+        assistant.call_transcript="Earlier transcript".into();
+        assert_eq!(assistant.call_view().transcript,"Earlier transcript");
+    }
+    #[test]
+    fn manual_reader_explains_monitor_start_failure_with_dashboard_disabled() {
+        let mut assistant=Assistant::new();assistant.config.call_panel=true;assistant.manual_call=true;
+        assistant.monitor_attempted=true;assistant.monitor_error=Some("Synthetic monitor initialization failure".into());
+        let view=assistant.call_view();assert!(view.visible&&!view.can_listen&&!view.listening);
+        assert_eq!(view.transcript,"Synthetic monitor initialization failure");
+        assert!(view.status.contains("Synthetic monitor initialization failure"));
     }
     #[test]
     fn only_exact_thread_identifiers_become_deep_links() {

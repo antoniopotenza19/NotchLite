@@ -3,6 +3,7 @@
 
 mod anim;
 mod assist;
+mod assist_glass;
 mod assist_layout;
 mod assist_metrics;
 mod assist_overlay;
@@ -42,6 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if window_policy::run_diagnostic()? { return Ok(()); }
     if call_ai::run_diagnostic()? { return Ok(()); }
     if call_coach::run_diagnostic()? { return Ok(()); }
+    if call_audio::run_diagnostic()? { return Ok(()); }
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     if args.first().is_some_and(|a| a == "--call-transcription-check") {
         if args.len() < 2 || args.len() > 3 { return Err("Usa --call-transcription-check <wav PCM16 mono 16kHz, max 8s> [lingua]".into()); }

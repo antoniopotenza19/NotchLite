@@ -80,10 +80,30 @@ fn activation_params(pid: u32) -> Result<PROPVARIANT, String> {
 }
 
 struct Activation { operation: IActivateAudioInterfaceAsyncOperation, signal: Arc<ActivationSignal>, began: Instant }
-struct Stream { client: IAudioClient, capture: IAudioCaptureClient, first_packet: bool }
+struct Stream { client: IAudioClient, capture: IAudioCaptureClient, first_packet: bool, began:Instant, input:SignalWatch }
 impl Drop for Stream { fn drop(&mut self) { unsafe { let _ = self.client.Stop(); } } }
 struct Packet<'a> { capture: &'a IAudioCaptureClient, frames: u32 }
 impl Drop for Packet<'_> { fn drop(&mut self) { unsafe { let _ = self.capture.ReleaseBuffer(self.frames); } } }
+
+#[derive(Default)]
+struct SignalWatch { health:InputHealth, last_packet:Option<Duration>, last_signal:Option<Duration> }
+impl SignalWatch {
+    fn packet(&mut self,elapsed:Duration,samples:&[i16]) {
+        if samples.is_empty(){return;}
+        self.health.packets=self.health.packets.saturating_add(1);
+        self.health.samples=self.health.samples.saturating_add(samples.len() as u64);
+        self.health.peak=samples.iter().map(|sample|sample.unsigned_abs()).max().unwrap_or(0);
+        self.last_packet=Some(elapsed);
+        if self.health.peak>2 {self.last_signal=Some(elapsed);}
+    }
+    fn snapshot(&self,elapsed:Duration)->InputHealth {
+        let mut health=self.health;let limit=Duration::from_secs(12);
+        health.signal=if self.last_packet.map_or(elapsed>=limit,|last|elapsed.saturating_sub(last)>=limit) {InputSignal::NoPackets}
+            else if self.last_signal.is_some_and(|last|elapsed.saturating_sub(last)<limit) {InputSignal::Receiving}
+            else if elapsed>=limit {InputSignal::Silent} else {InputSignal::Waiting};
+        health
+    }
+}
 
 pub(super) struct Capture {
     pub(super) target: AudioTarget,
@@ -131,7 +151,7 @@ impl Capture {
                 client.SetEventHandle(shared.wake.handle()).map_err(|e| format!("Cannot register audio-ready event: {e}"))?;
             }
             let capture: IAudioCaptureClient = unsafe { client.GetService() }.map_err(|e| format!("Cannot obtain audio buffers: {e}"))?;
-            let stream = Stream { client, capture, first_packet: true };
+            let stream = Stream { client, capture, first_packet: true, began:Instant::now(), input:SignalWatch::default() };
             if shared.wanted_generation.load(Ordering::Acquire) != self.generation { return Ok(()); }
             unsafe { stream.client.Start() }.map_err(|e| format!("Cannot start process loopback: {e}"))?;
             if shared.wanted_generation.load(Ordering::Acquire) != self.generation || !shared.state().listening(self.generation) {
@@ -156,7 +176,12 @@ impl Capture {
             stream.first_packet = false;
             let silent = flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0;
             let samples = unsafe { decode_pcm(data, frames as usize, silent) }?;
+            stream.input.packet(stream.began.elapsed(),&samples);
             shared.state().accept_pcm(self.generation, &samples)?;
+        }
+        let mut state=shared.state();
+        if state.generation==self.generation && state.snapshot.capture.as_ref().is_some_and(|capture|capture.state==CapturePhase::Listening) {
+            state.snapshot.input_health=stream.input.snapshot(stream.began.elapsed());
         }
         Ok(())
     }
@@ -189,5 +214,21 @@ mod tests {
         assert!(unsafe { decode_pcm(std::ptr::null_mut(),MAX_PACKET_FRAMES+1,true) }.is_err());
         let mut bytes=[99,1,0,255,255,0,128];
         assert_eq!(unsafe {decode_pcm(bytes.as_mut_ptr().add(1),3,false)}.unwrap(),[1,-1,i16::MIN]);
+    }
+    #[test]
+    fn input_watch_distinguishes_no_packets_silence_and_recovery_without_recording() {
+        let mut watch=SignalWatch::default();
+        assert_eq!(watch.snapshot(Duration::from_secs(1)).signal,InputSignal::Waiting);
+        assert_eq!(watch.snapshot(Duration::from_secs(12)).signal,InputSignal::NoPackets);
+        watch.packet(Duration::from_secs(12),&[0,0,0]);
+        let silent=watch.snapshot(Duration::from_secs(12));
+        assert_eq!(silent.signal,InputSignal::Silent);assert_eq!(silent.samples,3);assert!(silent.warning().is_some());
+        watch.packet(Duration::from_secs(13),&[0,i16::MIN,4]);
+        let receiving=watch.snapshot(Duration::from_secs(13));
+        assert_eq!(receiving.signal,InputSignal::Receiving);assert_eq!(receiving.peak,32768);assert_eq!(receiving.packets,2);assert!(receiving.warning().is_none());
+        assert_eq!(watch.snapshot(Duration::from_secs(25)).signal,InputSignal::NoPackets);
+        watch.packet(Duration::from_secs(25),&[0,0]);
+        assert_eq!(watch.snapshot(Duration::from_secs(25)).signal,InputSignal::Silent);
+        assert_eq!(watch.snapshot(Duration::from_secs(1)).signal,InputSignal::Receiving,"Saturating elapsed arithmetic cannot wrap");
     }
 }

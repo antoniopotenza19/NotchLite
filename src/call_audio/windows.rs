@@ -7,6 +7,7 @@ use ::windows::Win32::Foundation::{CloseHandle, BOOL, FILETIME, HANDLE, WAIT_TIM
 use ::windows::Win32::Media::Audio::*;
 use ::windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED};
 use ::windows::Win32::System::Threading::*;
+use ::windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot,Process32FirstW,Process32NextW,PROCESSENTRY32W,TH32CS_SNAPPROCESS};
 
 const MAX_DEVICES: u32 = 16;
 const MAX_ID_UNITS: usize = 1024;
@@ -80,12 +81,26 @@ unsafe fn owned_wide(value: PWSTR) -> Option<String> {
     result
 }
 
-pub(super) struct Process { handle: HANDLE, pub(super) started: u64, label: String, broad: bool }
+pub(super) struct Process { handle: HANDLE, pub(super) started: u64, label: String, broad: bool, teams_hint:bool }
 impl Process {
     pub(super) fn open(pid: u32) -> Option<Self> {
+        let mut process=Self::open_raw(pid)?;
+        // A WebView2 process may belong to Outlook, Widgets or another app.
+        // Follow only live, creation-time-checked WebView2 parents to Teams.
+        if is_webview(&process.label) {
+            if let Some(parents)=process_parents() {
+                process.teams_hint=has_teams_ancestor(pid,process.started,&parents,|ancestor|{
+                    let parent=Self::open_raw(ancestor)?;
+                    Some((parent.started,is_teams(&parent.label),is_webview(&parent.label)))
+                });
+            }
+        }
+        Some(process)
+    }
+    fn open_raw(pid:u32)->Option<Self> {
         if pid == 0 { return None; }
         let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE, false, pid).ok()? };
-        let mut result = Self { handle, started: 0, label: format!("Process {pid}"), broad: true };
+        let mut result = Self { handle, started: 0, label: format!("Process {pid}"), broad: true, teams_hint:false };
         let (mut created, mut exited, mut kernel, mut user) = (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
         unsafe { GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user).ok()?; }
         result.started = u64::from(created.dwHighDateTime) << 32 | u64::from(created.dwLowDateTime);
@@ -94,6 +109,7 @@ impl Process {
             let path = String::from_utf16_lossy(&name[..len as usize]);
             result.label = path.rsplit(['\\', '/']).next().unwrap_or("Application").to_string();
             let lower = result.label.to_ascii_lowercase();
+            result.teams_hint=is_teams(&lower);
             result.broad = ["chrome", "msedge", "firefox", "opera", "brave", "webview", "browser", "electron"]
                 .iter().any(|part| lower.contains(part));
         }
@@ -103,43 +119,84 @@ impl Process {
 }
 impl Drop for Process { fn drop(&mut self) { unsafe { let _ = CloseHandle(self.handle); } } }
 
-struct Session { control: IAudioSessionControl, callback: IAudioSessionEvents, process: Option<Process>, pid: u32 }
+fn is_teams(label:&str)->bool {matches!(label.to_ascii_lowercase().as_str(),"ms-teams.exe"|"teams.exe"|"msteams.exe")}
+fn is_webview(label:&str)->bool {label.eq_ignore_ascii_case("msedgewebview2.exe")}
+fn process_parents()->Option<HashMap<u32,u32>> {
+    let snapshot=unsafe{CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0).ok()?};
+    struct Snapshot(HANDLE);
+    impl Drop for Snapshot {fn drop(&mut self){unsafe{let _=CloseHandle(self.0);}}}
+    let snapshot=Snapshot(snapshot);
+    let mut row=PROCESSENTRY32W{dwSize:std::mem::size_of::<PROCESSENTRY32W>() as u32,..Default::default()};
+    unsafe{Process32FirstW(snapshot.0,&mut row).ok()?;}
+    let mut result=HashMap::new();
+    for _ in 0..4096 {
+        result.insert(row.th32ProcessID,row.th32ParentProcessID);
+        if unsafe{Process32NextW(snapshot.0,&mut row)}.is_err(){break;}
+    }
+    Some(result)
+}
+fn has_teams_ancestor(mut pid:u32,mut started:u64,parents:&HashMap<u32,u32>,mut identity:impl FnMut(u32)->Option<(u64,bool,bool)>)->bool {
+    let mut seen=HashSet::from([pid]);
+    for _ in 0..8 {
+        let Some(&parent)=parents.get(&pid) else{return false;};
+        if parent==0 || !seen.insert(parent){return false;}
+        let Some((parent_started,teams,webview))=identity(parent) else{return false;};
+        if parent_started>started{return false;}
+        if teams{return true;}
+        if !webview{return false;}
+        pid=parent;started=parent_started;
+    }
+    false
+}
+
+fn single_owner(session:&IAudioSessionControl2)->Option<u32> {
+    let mut pid=0;
+    // The generated Result<u32> erases the successful NO_SINGLE_PROCESS
+    // HRESULT. A spanning/ambiguous session must not select a single owner.
+    let status=unsafe{(Interface::vtable(session).GetProcessId)(Interface::as_raw(session),&mut pid)};
+    (status==HRESULT(0) && pid!=0).then_some(pid)
+}
+fn owner_matches(cached:u32,held_alive:bool,current:Option<u32>)->bool {held_alive && cached!=0 && current==Some(cached)}
+
+struct Session { control: IAudioSessionControl, extended:IAudioSessionControl2, callback: IAudioSessionEvents, process: Option<Process>, pid: u32 }
 impl Session {
     fn new(control: IAudioSessionControl, signals: Arc<Signals>) -> Option<Self> {
         let ext = control.cast::<IAudioSessionControl2>().ok()?;
         if unsafe { ext.IsSystemSoundsSession() } != HRESULT(1) { return None; } // S_FALSE means not system sounds.
-        let mut pid = 0;
-        // Generated Result<u32> discards AUDCLNT_S_NO_SINGLE_PROCESS's successful
-        // HRESULT. Preserve it here and exclude ambiguous multi-process sessions.
-        let status = unsafe { (Interface::vtable(&ext).GetProcessId)(Interface::as_raw(&ext), &mut pid) };
-        if status != HRESULT(0) { return None; }
+        let pid=single_owner(&ext)?;
         let process = Process::open(pid);
         let callback: IAudioSessionEvents = SessionCallback { signals }.into();
         unsafe { control.RegisterAudioSessionNotification(&callback).ok()?; }
-        Some(Self { control, callback, process, pid })
+        Some(Self { control, extended:ext, callback, process, pid })
     }
+    fn matches_owner(&self,current:Option<u32>)->bool {owner_matches(self.pid,self.process.as_ref().is_some_and(|process|process.alive()),current)}
     fn target(&self, id: &str) -> Option<AudioTarget> {
         let process = self.process.as_ref()?;
-        if !process.alive() || unsafe { self.control.GetState() }.ok()? != AudioSessionStateActive { return None; }
-        Some(AudioTarget { key: 0, label: process.label.clone(), pid: self.pid,
+        // GetProcessId updates session stream-switch state. Never keep using
+        // a cached render owner after Windows reports a replacement/ambiguity.
+        if !self.matches_owner(single_owner(&self.extended)) || unsafe { self.control.GetState() }.ok()? != AudioSessionStateActive { return None; }
+        let label=if process.teams_hint {format!("Microsoft Teams · {}",process.label)}else{process.label.clone()};
+        Some(AudioTarget { key: 0, label, pid: self.pid,
             process_started: process.started, session_id: id.to_string(), broad_capture: process.broad })
     }
 }
 impl Drop for Session { fn drop(&mut self) { unsafe { let _ = self.control.UnregisterAudioSessionNotification(&self.callback); } } }
 
-struct Device { manager: IAudioSessionManager2, duck: IAudioVolumeDuckNotification, created: IAudioSessionNotification, sessions: HashMap<String, Session> }
+struct Device { manager: IAudioSessionManager2, duck: Option<IAudioVolumeDuckNotification>, created: IAudioSessionNotification, sessions: HashMap<String, Session> }
 impl Device {
     fn new(device: &IMMDevice, signals: &Arc<Signals>) -> ::windows::core::Result<Self> {
         let manager = unsafe { device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)? };
         let duck: IAudioVolumeDuckNotification = DuckCallback { signals: Arc::clone(signals) }.into();
         let created: IAudioSessionNotification = CreatedCallback { signals: Arc::clone(signals) }.into();
-        unsafe { manager.RegisterDuckNotification(PCWSTR::null(), &duck)?; }
+        // Duck events are optional hints, not a prerequisite for cataloguing
+        // render sessions or explicitly selecting a Teams/WebView2 stream.
+        let duck=unsafe { manager.RegisterDuckNotification(PCWSTR::null(), &duck) }.ok().map(|_|duck);
         if let Err(error) = unsafe { manager.RegisterSessionNotification(&created) } {
-            unsafe { let _ = manager.UnregisterDuckNotification(&duck); } return Err(error);
+            if let Some(duck)=&duck {unsafe { let _ = manager.UnregisterDuckNotification(duck); }} return Err(error);
         }
         Ok(Self { manager, duck, created, sessions: HashMap::new() })
     }
-    fn refresh(&mut self, signals: &Arc<Signals>, remaining: &mut usize, registered: &mut usize) -> ::windows::core::Result<Vec<AudioTarget>> {
+    fn refresh(&mut self, signals: &Arc<Signals>, remaining: &mut usize, registered: &mut usize, teams:&mut HashSet<String>) -> ::windows::core::Result<Vec<AudioTarget>> {
         let list = unsafe { self.manager.GetSessionEnumerator()? };
         // GetCount after registration is required to enable new-session events.
         let count = unsafe { list.GetCount()? }.clamp(0, MAX_TARGETS as i32);
@@ -149,6 +206,13 @@ impl Device {
             let control = match unsafe { list.GetSession(i) } { Ok(c) => c, Err(_) => continue };
             let ext = match control.cast::<IAudioSessionControl2>() { Ok(c) => c, Err(_) => continue };
             let id = match unsafe { ext.GetSessionInstanceIdentifier().ok().and_then(|s| owned_wide(s)) } { Some(s) => s, None => continue };
+            let owner=single_owner(&ext);
+            if self.sessions.get(&id).is_some_and(|session|!session.matches_owner(owner)) {
+                // Retire before replacement registration to preserve the real
+                // callback budget. A new owner is a new target identity/key;
+                // an existing capture is stopped by selected_live, not rebound.
+                self.sessions.remove(&id);*registered-=1;
+            }
             if !self.sessions.contains_key(&id) && *registered < MAX_TARGETS {
                 if let Some(session) = Session::new(control, Arc::clone(signals)) {
                     self.sessions.insert(id.clone(), session); *registered += 1;
@@ -156,7 +220,10 @@ impl Device {
             }
             if let Some(session) = self.sessions.get(&id) {
                 *remaining -= 1; alive.insert(id.clone());
-                if let Some(target) = session.target(&id) { result.push(target); }
+                if let Some(target) = session.target(&id) {
+                    if session.process.as_ref().is_some_and(|process|process.teams_hint){teams.insert(id.clone());}
+                    result.push(target);
+                }
             }
         }
         let before = self.sessions.len();
@@ -170,7 +237,7 @@ impl Drop for Device {
         self.sessions.clear();
         unsafe {
             let _ = self.manager.UnregisterSessionNotification(&self.created);
-            let _ = self.manager.UnregisterDuckNotification(&self.duck);
+            if let Some(duck)=&self.duck {let _ = self.manager.UnregisterDuckNotification(duck);}
         }
     }
 }
@@ -211,14 +278,20 @@ pub(super) fn run(shared: Arc<Shared>, ready: SyncSender<Result<(), String>>) {
             if signals.dirty.swap(false, Ordering::AcqRel) || last.elapsed() >= Duration::from_secs(2) {
                 last = Instant::now();
                 match refresh(&enumerator, &mut devices, &signals) {
-                    Ok(targets) => {
+                    Ok((mut targets,teams)) => {
                         retain_communications(&mut communication_ids, &targets, Instant::now());
-                        let ids = communication_ids.keys().cloned().collect();
-                        shared.state().catalog(targets, &ids)?;
+                        // Windows does not replay the duck event when the
+                        // monitor starts during a call. Active exact Teams
+                        // render owners are a possible-call hint only; capture
+                        // still requires explicit consent for this session.
+                        let ids=proposal_ids(&mut targets,&communication_ids,&teams);
+                        let mut state=shared.state();state.catalog(targets, &ids)?;
+                        state.snapshot.teams_render_sessions=teams.len();
                     }
                     Err(error) => {
                         devices.clear(); communication_ids.clear();
                         let mut state = shared.state(); state.catalog(Vec::new(), &HashSet::new())?;
+                        state.snapshot.teams_render_sessions=0;
                         state.snapshot.last_error = Some(format!("Audio metadata unavailable: {error}"));
                     }
                 }
@@ -238,6 +311,8 @@ pub(super) fn run(shared: Arc<Shared>, ready: SyncSender<Result<(), String>>) {
     if let Err(error) = result { let _ = ready.try_send(Err(error.clone())); shared.state().snapshot.last_error = Some(error); }
     shared.wanted_generation.store(0, Ordering::Release);
     let mut state = shared.state(); state.snapshot.candidates.clear(); state.snapshot.suggested = None; state.snapshot.capture = None;
+    state.snapshot.input_health=InputHealth::default();
+    state.snapshot.teams_render_sessions=0;
     state.pending = None; state.pcm.clear(); state.partial.clear();
 }
 
@@ -283,7 +358,7 @@ fn service_capture(shared: &Arc<Shared>, devices: &HashMap<String, Device>, acti
     }
 }
 
-fn refresh(enumerator: &IMMDeviceEnumerator, devices: &mut HashMap<String, Device>, signals: &Arc<Signals>) -> Result<Vec<AudioTarget>, String> {
+fn refresh(enumerator: &IMMDeviceEnumerator, devices: &mut HashMap<String, Device>, signals: &Arc<Signals>) -> Result<(Vec<AudioTarget>,HashSet<String>), String> {
     // eRender endpoint metadata only: no capture endpoint or audio client opened.
     let list = unsafe { enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) }.map_err(|e| e.to_string())?;
     let count = unsafe { list.GetCount() }.map_err(|e| e.to_string())?.min(MAX_DEVICES);
@@ -296,19 +371,19 @@ fn refresh(enumerator: &IMMDeviceEnumerator, devices: &mut HashMap<String, Devic
     // Retire removed endpoints before registering replacements: the registration
     // budget is a real bound, not only a bound on the published snapshot.
     devices.retain(|id, _| live.contains(id));
-    let mut targets = Vec::new(); let mut remaining = MAX_TARGETS;
+    let mut targets = Vec::new(); let mut teams=HashSet::new();let mut remaining = MAX_TARGETS;
     let mut registered = devices.values().map(|d| d.sessions.len()).sum();
     for (id, endpoint) in endpoints {
         if signals.shared.stop.load(Ordering::Acquire) { break; }
         if !devices.contains_key(&id) {
             match Device::new(&endpoint, signals) { Ok(device) => { devices.insert(id.clone(), device); }, Err(_) => continue }
         }
-        if let Some(device) = devices.get_mut(&id) { targets.extend(device.refresh(signals, &mut remaining, &mut registered).map_err(|e| e.to_string())?); }
+        if let Some(device) = devices.get_mut(&id) { targets.extend(device.refresh(signals, &mut remaining, &mut registered,&mut teams).map_err(|e| e.to_string())?); }
     }
     if count != 0 && devices.is_empty() && !signals.shared.stop.load(Ordering::Acquire) {
         return Err("Core Audio session notifications are unavailable".into());
     }
-    Ok(targets)
+    Ok((targets,teams))
 }
 
 fn retain_communications(ids: &mut HashMap<String, Instant>, targets: &[AudioTarget], now: Instant) {
@@ -318,6 +393,14 @@ fn retain_communications(ids: &mut HashMap<String, Instant>, targets: &[AudioTar
         if targets.iter().any(|t| t.session_id == *id) { *seen = now; true }
         else { now.saturating_duration_since(*seen) < Duration::from_secs(10) }
     });
+}
+
+fn proposal_ids(targets:&mut [AudioTarget],communications:&HashMap<String,Instant>,teams:&HashSet<String>)->HashSet<String> {
+    // A correlated communication event is stronger than the Teams fallback.
+    targets.sort_by_key(|target|(!communications.contains_key(&target.session_id),!teams.contains(&target.session_id)));
+    let mut ids:HashSet<_>=communications.keys().cloned().collect();
+    ids.extend(teams.iter().cloned());
+    ids
 }
 
 #[cfg(test)]
@@ -330,5 +413,64 @@ mod tests {
         let target = AudioTarget { key: 1, label: "Fake".into(), pid: 1, process_started: 1, session_id: "instance".into(), broad_capture: false };
         retain_communications(&mut ids, &[target], start + Duration::from_secs(9)); assert_eq!(ids.len(), 1);
         retain_communications(&mut ids, &[], start + Duration::from_secs(20)); assert!(ids.is_empty());
+    }
+    #[test]
+    fn teams_webview_requires_a_live_time_checked_chain_not_any_webview() {
+        assert!(is_teams("MS-TEAMS.EXE"));assert!(!is_teams("ms-teamsupdate.exe"));
+        assert!(!is_teams("teams-helper.exe"));assert!(!is_teams("msedgewebview2.exe"));
+        assert!(!is_teams("Microsoft Teams · lookalike.exe"));
+        let parents=HashMap::from([(4,3),(3,2),(2,1)]);
+        let identities=HashMap::from([(3,(30,false,true)),(2,(20,true,false)),(1,(10,true,false))]);
+        assert!(has_teams_ancestor(4,40,&parents,|pid|identities.get(&pid).copied()));
+        assert!(!has_teams_ancestor(4,20,&parents,|pid|identities.get(&pid).copied()),"A reused/newer parent PID is not the creator");
+        assert!(!has_teams_ancestor(4,40,&parents,|pid|if pid==3{None}else{identities.get(&pid).copied()}));
+        assert!(!has_teams_ancestor(4,40,&parents,|pid|Some((pid as u64,false,false))),"Another WebView2 host is not Teams");
+        let cycle=HashMap::from([(4,3),(3,4)]);
+        assert!(!has_teams_ancestor(4,40,&cycle,|_|Some((10,false,true))));
+        let deep:HashMap<_,_>=(1..=10).map(|pid|(pid,pid+1)).collect();
+        assert!(!has_teams_ancestor(1,100,&deep,|pid|Some((100,pid==10,true))),"Ancestry traversal is bounded");
+    }
+    #[test]
+    fn active_teams_can_offer_consent_without_a_new_duck_event_but_cannot_capture() {
+        let mut teams=AudioTarget { key:0,label:"Microsoft Teams · msedgewebview2.exe".into(),pid:5,process_started:50,session_id:"teams-active".into(),broad_capture:true };
+        let unrelated=AudioTarget {label:"msedgewebview2.exe".into(),session_id:"outlook".into(),..teams.clone()};
+        let communications=HashMap::new();let mut targets=vec![unrelated,teams.clone()];
+        assert!(proposal_ids(&mut targets,&communications,&HashSet::new()).is_empty(),"Display labels never grant a Teams hint");
+        let ids=proposal_ids(&mut targets,&communications,&HashSet::from(["teams-active".into()]));assert_eq!(ids,HashSet::from(["teams-active".into()]));
+        let mut state=State::default();state.catalog(targets,&ids).unwrap();
+        assert!(state.snapshot.suggested.is_some());assert!(state.snapshot.capture.is_none());assert!(state.pending.is_none());
+        let key=state.snapshot.suggested.unwrap();state.decline(key);
+        teams.key=key;state.catalog(vec![teams.clone()],&ids).unwrap();assert!(state.snapshot.suggested.is_none());
+        state.catalog(vec![],&HashSet::new()).unwrap();state.catalog(vec![teams],&ids).unwrap();assert!(state.snapshot.suggested.is_some());
+    }
+    #[test]
+    fn exact_communications_event_precedes_teams_audio_hint() {
+        let mut targets=vec![AudioTarget{key:0,label:"Microsoft Teams · ms-teams.exe".into(),pid:5,process_started:50,session_id:"teams".into(),broad_capture:false},
+            AudioTarget{key:0,label:"Discord.exe".into(),pid:6,process_started:60,session_id:"communication".into(),broad_capture:false}];
+        let ids=proposal_ids(&mut targets,&HashMap::from([("communication".into(),Instant::now())]),&HashSet::from(["teams".into()]));
+        let mut state=State::default();state.catalog(targets,&ids).unwrap();
+        assert_eq!(state.snapshot.candidates[0].session_id,"communication");
+        assert_eq!(state.snapshot.suggested,Some(state.snapshot.candidates[0].key));
+    }
+    #[test]
+    fn stream_owner_change_retires_old_identity_and_requires_new_consent() {
+        let old=AudioTarget{key:0,label:"Teams audio".into(),pid:5,process_started:50,session_id:"same-instance".into(),broad_capture:true};
+        let ids=HashSet::from([old.session_id.clone()]);let mut state=State::default();
+        state.catalog(vec![old.clone()],&ids).unwrap();let old_key=state.snapshot.candidates[0].key;
+        let generation=state.begin_capture(old_key).unwrap();assert!(state.listening(generation));
+        state.accept_pcm(generation,&vec![17;CHUNK_SAMPLES]).unwrap();
+        assert!(owner_matches(5,true,Some(5)));assert!(!owner_matches(5,true,Some(9)));
+        assert!(!owner_matches(5,false,Some(5)));assert!(!owner_matches(5,true,None));
+        let replacement=AudioTarget{pid:9,process_started:90,..old};
+        state.catalog(vec![replacement],&ids).unwrap();let new_key=state.snapshot.candidates[0].key;
+        assert_ne!(old_key,new_key,"An unchanged session-instance string does not preserve consent for a different PID");
+        assert_eq!(state.snapshot.capture.as_ref().unwrap().key,old_key,"Cataloguing does not rebind the capture");
+        assert!(state.begin_capture(new_key).is_err());
+        // selected_live rejects the old target on this mismatch; service_capture
+        // then revokes/drains it before offering the new target for confirmation.
+        state.request_stop(Some("Selected audio owner changed".into()));state.finish_capture(generation);
+        assert!(state.snapshot.capture.is_none());assert!(state.pcm.is_empty());assert!(state.pending.is_none());
+        let next=state.begin_capture(new_key).unwrap();assert_ne!(next,generation);
+        assert_eq!(state.snapshot.capture.as_ref().unwrap().key,new_key);
     }
 }

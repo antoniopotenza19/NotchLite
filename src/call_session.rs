@@ -14,13 +14,16 @@ fn above_noise_floor(frame:&[i16])->bool {
 }
 
 #[derive(Default)]
-struct Segmenter { samples: Vec<i16>, lead: Vec<i16>, quiet: usize, voiced: usize, continuation: bool }
+struct Segmenter { samples: Vec<i16>, lead: Vec<i16>, quiet: usize, voiced: usize, continuation: bool,
+    received_samples: u64, voiced_samples: u64 }
 struct Segment { samples: Vec<i16>, overlaps_previous: bool }
 impl Segmenter {
     fn push(&mut self, input: &[i16]) -> Vec<Segment> {
         let mut output = Vec::new();
         for frame in input.chunks(FRAME) {
             let speech = above_noise_floor(frame);
+            self.received_samples=self.received_samples.saturating_add(frame.len() as u64);
+            if speech {self.voiced_samples=self.voiced_samples.saturating_add(frame.len() as u64);}
             if self.samples.is_empty() && !speech {
                 self.lead.extend_from_slice(frame);
                 let trim = self.lead.len().saturating_sub(RATE / 5);
@@ -91,6 +94,8 @@ pub struct CallSession {
     profile_label: String,
     next_segment: u64,
     last_result: u64,
+    completed_results: u64,
+    empty_results: u64,
     overlaps: BTreeMap<u64, bool>,
 }
 impl CallSession {
@@ -102,7 +107,7 @@ impl CallSession {
         let coach = if with_ai { Some(crate::call_coach::Coach::start(generation, context.clone())?) } else { None };
         Ok(Self { generation, stt, segmenter: Segmenter::default(),
             transcript: String::new(), notice, suggestion: String::new(), context, coach, profile_label,
-            next_segment: 0, last_result: 0, overlaps: BTreeMap::new() })
+            next_segment: 0, last_result: 0, completed_results: 0, empty_results: 0, overlaps: BTreeMap::new() })
     }
     pub fn push_audio(&mut self, chunk: AudioChunk) -> Result<(), String> {
         if chunk.generation != self.generation { return Ok(()); }
@@ -123,6 +128,8 @@ impl CallSession {
             if result.dropped_results > 0 { self.notice = Some("Un risultato non letto è stato sostituito: la trascrizione può avere una lacuna.".into()); }
             match result.text {
                 Ok(text) => {
+                    self.completed_results=self.completed_results.saturating_add(1);
+                    if text.trim().is_empty() {self.empty_results=self.empty_results.saturating_add(1);}
                     let overlap = self.last_result.checked_add(1) == Some(result.segment_id)
                         && self.overlaps.get(&result.segment_id).copied().unwrap_or(false);
                     let fresh = merge(&mut self.transcript, &text, overlap);
@@ -145,6 +152,21 @@ impl CallSession {
     pub fn ai_enabled(&self) -> bool { self.coach.is_some() }
     pub fn profile_label(&self) -> &str { &self.profile_label }
     pub fn ai_status(&self) -> Option<String> {self.coach.as_ref().map(|coach|coach.status())}
+    pub fn ai_feedback(&self) -> Option<String> {self.coach.as_ref().map(|coach|coach.feedback())}
+    pub fn progress_label(&self) -> String {
+        format!("Audio {:.1}s · sopra soglia {:.1}s · segmenti {} · esiti {} (vuoti {})",
+            self.segmenter.received_samples as f64 / RATE as f64,
+            self.segmenter.voiced_samples as f64 / RATE as f64,
+            self.next_segment,self.completed_results,self.empty_results)
+    }
+    pub fn reader_feedback(&self) -> Option<&'static str> {
+        if self.next_segment>self.last_result {Some("Trascrizione in elaborazione…")}
+        else if self.segmenter.received_samples>=12*RATE as u64 && self.segmenter.voiced_samples==0 {
+            Some("Audio ricevuto, ma sotto la soglia vocale. Se l'altra persona sta parlando, controlla sorgente e volume in Controlli.")
+        } else if self.completed_results>0 && self.transcript.is_empty() {
+            Some("Audio elaborato, nessuna parola riconosciuta. Controlla sorgente e lingua in Controlli.")
+        } else {None}
+    }
     pub fn stop(&mut self) {
         if let Some(coach) = &mut self.coach { coach.stop(); }
         self.stt.stop(); self.segmenter = Segmenter::default(); self.overlaps.clear();
@@ -155,6 +177,20 @@ impl Drop for CallSession { fn drop(&mut self) { self.stop(); } }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn input_progress_distinguishes_quiet_pcm_and_never_counts_retained_overlap_twice() {
+        let mut segmenter=Segmenter::default();
+        for _ in 0..120 {assert!(segmenter.push(&[50;FRAME]).is_empty());}
+        assert_eq!(segmenter.received_samples,12*RATE as u64);
+        assert_eq!(segmenter.voiced_samples,0);
+        let mut segments=Vec::new();
+        for _ in 0..60 {segments.extend(segmenter.push(&[500;FRAME]));}
+        assert_eq!(segments.len(),1);
+        assert_eq!(segmenter.received_samples,18*RATE as u64);
+        assert_eq!(segmenter.voiced_samples,6*RATE as u64);
+        for _ in 0..10 {segmenter.push(&[0;FRAME]);}
+        assert_eq!(segmenter.voiced_samples,6*RATE as u64);
+    }
     #[test]
     fn silence_has_no_segments_and_speech_flushes_after_pause() {
         let mut s = Segmenter::default();

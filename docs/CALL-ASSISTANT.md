@@ -97,7 +97,7 @@ del solo Whisper. La RAM della GUI durante una call reale non è misurata.
 
 I test di layout e segmentazione sono distinti dalle prove su file audio e
 dalla diagnostica del server AI. I dettagli della build corrente sono nel
-[record dell'iterazione](review/iteration-13/VALIDATION.json). Il confronto
+[record dell'iterazione](review/iteration-14/VALIDATION.json). Il confronto
 italiano usa ora anche parlato pubblico FLEURS e segmentazione Rust reale;
 non certifica l'accuratezza della tua call Discord.
 Il collaudo non richiede microfono o registrazione della tua chiamata.
@@ -115,3 +115,5 @@ Fonti: [process loopback Microsoft](https://learn.microsoft.com/en-us/samples/mi
 [ducking](https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nf-audiopolicy-iaudiosessionmanager2-registerducknotification),
 [identità della sessione](https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nf-audiovolumeducknotification-onvolumeducknotification),
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
+
+Nella 0.1.13 il pannello parte in Lettura. Controlli contiene sorgente, contesto, profilo e contatori audio/ASR. La cattura confermata riporta alla lettura; Stop resta visibile. Avvisi distinguono nessun pacchetto, silenzio, input sotto soglia e motore in elaborazione. Gli errori di avvio monitor sono visibili anche con dashboard spenta. [Teams e diagnosi](TEAMS-DIAGNOSTICS.md). Il problema della call segnalata non è stato riprodotto.

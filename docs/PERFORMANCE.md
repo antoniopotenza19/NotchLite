@@ -48,3 +48,7 @@ Base Q5_1 e Silero VAD privilegiano la qualità rispetto al vecchio Tiny con con
 [Confronto italiano e risorse separate](review/iteration-13/TRANSCRIPTION.md): Turbo Q5_0 Vulkan195, no flash, 6/159 modifiche rispetto a Base39/159; mediana calda1,134s per processo. Picchi campionati195:129,95MiB working set,1726,13MiB commit privato. Prima inizializzazione preliminare199,90/1790,36MiB. Prova PDH distinta:1181,39MiB GPU dedicata e1,5MiB condivisa. Non sono valori sommabili, RAM intera app o un budget massimo. Nessuna misura della GUI durante una call. Modello rilasciato tra i segmenti.
 
 [Campione UI inattiva 0.1.12](PERFORMANCE-0.1.12.md): 61,75 MiB working set e 51,87 MiB commit privato massimi su 20,2 s, notch e pannello call visibili, ascolto spento. Non include Whisper, Codex o GPU.
+
+## Reader call 0.1.13
+
+[Misura dedicata](PERFORMANCE-0.1.13.md): UI con reader e cornice DWM richiesta, ascolto spento; 77,47 MiB working set e 90,90 MiB commit privato massimi, CPU media 0,23% su 22,9 s. Esclude Whisper/Codex/GPU/DWM. Nessun confronto controllato o prova Teams reale.

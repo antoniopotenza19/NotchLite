@@ -11,7 +11,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Controls::{DRAWITEMSTRUCT, ODS_DISABLED, ODS_FOCUS, ODS_NOFOCUSRECT, ODS_SELECTED, EM_GETFIRSTVISIBLELINE, EM_LINESCROLL, EM_SETLIMITTEXT, EM_SETRECT};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
-use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
+use windows::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, SetFocus};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::assist_layout::{self, Monitor, PlacementError, ScreenRect};
@@ -57,6 +57,7 @@ const CONFIRM_AI: i32 = 211;
 const CALL_TRANSCRIPT_LABEL: i32 = 212;
 const CALL_SUGGESTION_LABEL: i32 = 213;
 const CALL_RESIZE: i32 = 214;
+const CALL_CONTROLS: i32 = 215;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OverlayConfig {
@@ -417,11 +418,15 @@ fn clear_dashboard_peer(closed: HWND) {
     }
 }
 struct PaintResources { font: HFONT, heading: HFONT, background: HBRUSH, input: HBRUSH, highlight: HBRUSH,
-    bg: COLORREF, fg: COLORREF, accent: COLORREF, input_bg: COLORREF, border_color: COLORREF }
+    bg: COLORREF, fg: COLORREF, accent: COLORREF, accent_fg: COLORREF, input_bg: COLORREF, border_color: COLORREF, high_contrast:bool }
 impl PaintResources {
     fn new(dpi: u32, kind: Kind) -> Result<Self> {
-        let bg = color(theme::bg(), theme::bg()); let fg = color(theme::text(), theme::bg());
-        let input_bg = color(if kind == Kind::Call { theme::card() } else { theme::card_hover() }, theme::bg()); let accent = color(theme::accent(), theme::bg());
+        let contrast=kind==Kind::Call && crate::assist_glass::high_contrast();
+        let bg = if contrast {COLORREF(unsafe{GetSysColor(COLOR_WINDOW)})} else {color(theme::bg(), theme::bg())};
+        let fg = if contrast {COLORREF(unsafe{GetSysColor(COLOR_WINDOWTEXT)})} else {color(theme::text(), theme::bg())};
+        let input_bg = if contrast {bg} else {color(if kind == Kind::Call { theme::card() } else { theme::card_hover() }, theme::bg())};
+        let accent = if contrast {COLORREF(unsafe{GetSysColor(COLOR_HIGHLIGHT)})} else {color(theme::accent(), theme::bg())};
+        let accent_fg = if contrast {COLORREF(unsafe{GetSysColor(COLOR_HIGHLIGHTTEXT)})} else {bg};
         let font = unsafe { CreateFontW(-scale(if kind == Kind::Call { 15 } else { 13 }, dpi), 0, 0, 0, FW_NORMAL.0 as i32, 0, 0, 0,
             DEFAULT_CHARSET.0 as u32, OUT_DEFAULT_PRECIS.0 as u32, CLIP_DEFAULT_PRECIS.0 as u32,
             CLEARTYPE_QUALITY.0 as u32, DEFAULT_PITCH.0 as u32, w!("Segoe UI")) };
@@ -430,9 +435,9 @@ impl PaintResources {
             DEFAULT_CHARSET.0 as u32, OUT_DEFAULT_PRECIS.0 as u32, CLIP_DEFAULT_PRECIS.0 as u32,
             CLEARTYPE_QUALITY.0 as u32, DEFAULT_PITCH.0 as u32, w!("Segoe UI")) };
         let background = unsafe { CreateSolidBrush(bg) }; let input = unsafe { CreateSolidBrush(input_bg) };
-        let border_color = color(theme::border(), theme::bg());
+        let border_color = if contrast {fg} else {color(theme::border(), theme::bg())};
         let highlight = unsafe { CreateSolidBrush(accent) };
-        let resources = Self { font, heading, background, input, highlight, bg, fg, accent, input_bg, border_color };
+        let resources = Self { font, heading, background, input, highlight, bg, fg, accent, accent_fg, input_bg, border_color, high_contrast:contrast };
         if heading.is_invalid() || background.is_invalid() || input.is_invalid() || highlight.is_invalid() { return Err(Error::new(E_FAIL, "Cannot create overlay resources")); }
         Ok(resources)
     }
@@ -450,6 +455,7 @@ struct WindowState {
     kind: Kind, destroyed: Cell<bool>, updating: Cell<bool>, initialized: Cell<bool>, dpi: Cell<u32>, queue: Rc<ActionQueue>,
     content: RefCell<Content>, controls: RefCell<Vec<(i32, HWND)>>, paint: RefCell<PaintResources>,
     resize: Option<Rc<CallResizeState>>,
+    call_controls: Cell<bool>, glass: Cell<bool>,
 }
 impl WindowState {
     fn control(&self, id: i32) -> HWND { self.controls.borrow().iter().find(|(key, _)| *key == id).map(|(_, h)| *h).unwrap_or_default() }
@@ -460,7 +466,8 @@ impl OverlayWindow {
         if QUITTING.with(Cell::get) { return Err(Error::new(E_FAIL, "Application is shutting down")); }
         let state = Box::new(WindowState { kind, destroyed: Cell::new(false), updating: Cell::new(true), initialized: Cell::new(false), dpi: Cell::new(96), queue,
             content: RefCell::new(if kind == Kind::Dashboard { Content::Dashboard(DashboardView::default()) } else { Content::Call(CallView::default()) }),
-            controls: RefCell::new(Vec::new()), paint: RefCell::new(PaintResources::new(96, kind)?), resize });
+            controls: RefCell::new(Vec::new()), paint: RefCell::new(PaintResources::new(96, kind)?), resize,
+            call_controls:Cell::new(false),glass:Cell::new(false) });
         let hwnd = unsafe {
             let instance = GetModuleHandleW(None)?;
             let class = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: instance.into(), lpszClassName: w!("NotchLiteAssistOverlay"),
@@ -474,6 +481,7 @@ impl OverlayWindow {
         let window = Self { hwnd, state };
         WINDOWS.with(|items| items.borrow_mut().push(hwnd));
         window.apply_capture_policy()?;
+        window.update_glass();
         create_controls(hwnd, &window.state)?;
         window.state.updating.set(false);
         if QUITTING.with(Cell::get) { return Err(Error::new(E_FAIL, "Application is shutting down")); }
@@ -495,17 +503,23 @@ impl OverlayWindow {
         Ok(())
     }
     fn palette_changed(&self) -> Result<()> { self.update_resources(self.state.dpi.get()) }
+    fn update_glass(&self) {
+        if self.state.kind==Kind::Call {self.state.glass.set(crate::assist_glass::apply(self.hwnd,self.state.dpi.get(),theme::graphite()));}
+    }
     fn update_resources(&self, dpi: u32) -> Result<()> {
-        let next = PaintResources::new(dpi, self.state.kind)?;
-        // Native children must stop referring to the old HFONT before it drops.
-        for (id, child) in self.state.controls.borrow().iter() { unsafe { SendMessageW(*child, WM_SETFONT, WPARAM((if *id == 99 { next.heading.0 } else { next.font.0 }) as usize), LPARAM(1)); } }
-        let previous = self.state.paint.replace(next); drop(previous);
-        self.state.dpi.set(dpi);
-        unsafe { let _ = InvalidateRect(self.hwnd, None, true); }
-        Ok(())
+        update_resources(self.hwnd,&self.state,dpi)
     }
     fn dashboard(&self, view: &DashboardView) { apply_dashboard(self.hwnd, &self.state, view); }
     fn call(&self, view: &CallView) { apply_call(self.hwnd, &self.state, view); }
+}
+
+fn update_resources(hwnd:HWND,state:&WindowState,dpi:u32)->Result<()> {
+    let next=PaintResources::new(dpi,state.kind)?;
+    // Native children must stop referring to the old HFONT before it drops.
+    for (id,child) in state.controls.borrow().iter() {unsafe{SendMessageW(*child,WM_SETFONT,WPARAM((if *id==99{next.heading.0}else{next.font.0})as usize),LPARAM(1));}}
+    let previous=state.paint.replace(next);drop(previous);state.dpi.set(dpi);
+    if state.kind==Kind::Call {state.glass.set(crate::assist_glass::apply(hwnd,dpi,theme::graphite()));}
+    unsafe{let _=InvalidateRect(hwnd,None,true);}Ok(())
 }
 impl Drop for OverlayWindow {
     fn drop(&mut self) {
@@ -537,7 +551,7 @@ fn text(hwnd: HWND, max: usize) -> Option<String> {
 fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
     let child = |id: i32, class: PCWSTR, value: &str, extra: u32, tab: bool| -> Result<()> {
         let value = wide(value);
-        let button_style = if state.kind == Kind::Call && matches!(id, CLOSE | CALL_RESIZE | CONFIRM | CONFIRM_AI | DECLINE | STOP) { BS_OWNERDRAW as u32 } else { 0 };
+        let button_style = if state.kind == Kind::Call && matches!(id, CLOSE | CALL_RESIZE | CALL_CONTROLS | CONFIRM | CONFIRM_AI | DECLINE | STOP) { BS_OWNERDRAW as u32 } else { 0 };
         let style = WS_CHILD | WS_VISIBLE | WINDOW_STYLE(extra | button_style) | if tab { WS_TABSTOP } else { WINDOW_STYLE(0) };
         let control = unsafe { CreateWindowExW(WINDOW_EX_STYLE(0), class, PCWSTR(value.as_ptr()), style,
             0, 0, 1, 1, hwnd, HMENU(id as usize as *mut core::ffi::c_void), GetModuleHandleW(None)?, None)? };
@@ -546,7 +560,7 @@ fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
         unsafe { SendMessageW(control, WM_SETFONT, WPARAM((if id == 99 { paint.heading.0 } else { paint.font.0 }) as usize), LPARAM(0)); }
         Ok(())
     };
-    child(99, w!("STATIC"), if state.kind == Kind::Dashboard { "Codex dashboard" } else { "Assistente call" }, 0, false)?;
+    child(99, w!("STATIC"), if state.kind == Kind::Dashboard { "Codex dashboard" } else { "Call" }, 0, false)?;
     child(CLOSE, w!("BUTTON"), if state.kind == Kind::Call { "Chiudi" } else { "Close" }, 0, true)?;
     if state.kind == Kind::Dashboard {
         for id in [CONNECTION, USAGE, RESOURCES, STATUS] { child(id, w!("STATIC"), "", 0, false)?; }
@@ -566,6 +580,7 @@ fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
         for (id, label) in [(SEND, "Send"), (OPEN_CODEX, "Open Codex"), (REFRESH, "Refresh"), (SHOW_CALL, "Calls")] { child(id, w!("BUTTON"), label, 0, true)?; }
         unsafe { SendMessageW(state.control(REPLY), EM_SETLIMITTEXT, WPARAM(MAX_FOLLOWUP), LPARAM(0)); }
     } else {
+        child(CALL_CONTROLS,w!("BUTTON"),"Controlli",0,true)?;
         child(CALL_RESIZE, w!("BUTTON"), "Ingrandisci", 0, true)?;
         for id in [CALL_STATUS, CALL_SCOPE, CALL_PROVIDER] { child(id, w!("STATIC"), "", 0, false)?; }
         child(CALL_TARGET, w!("COMBOBOX"), "", (CBS_DROPDOWNLIST | CBS_HASSTRINGS) as u32 | WS_VSCROLL.0, true)?;
@@ -605,7 +620,7 @@ fn layout_controls(hwnd: HWND, state: &WindowState) {
         if !child.is_invalid() { unsafe { let _ = SetWindowPos(child, None, x, top, w.max(1), h.max(1), SWP_NOZORDER | SWP_NOACTIVATE); } }
     };
     let was_updating = state.updating.replace(true);
-    place(99, margin, y, (width - px(if state.kind == Kind::Call { 154 } else { 62 })).max(1), px(24));
+    place(99, margin, y, (width - px(if state.kind == Kind::Call { 158 } else { 62 })).max(1), px(24));
     place(CLOSE, client.right - margin - px(58), y, px(58), px(24)); y += px(28);
     if state.kind == Kind::Dashboard {
         for (id, height) in [(CONNECTION, 36), (USAGE, 32), (RESOURCES, 32)] {
@@ -638,15 +653,33 @@ fn layout_controls(hwnd: HWND, state: &WindowState) {
         let button_w = ((width - gap * 3) / 4).max(1);
         for (i, id) in [SEND, OPEN_CODEX, REFRESH, SHOW_CALL].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, buttons_y, button_w, px(28)); }
     } else {
-        place(CALL_RESIZE, client.right - margin - px(150), margin, px(88), px(24));
-        if let Ok(body) = assist_layout::call_body_rects(client.right, client.bottom, dpi) {
-            let position = |id, rect: ScreenRect| place(id, rect.left, rect.top, rect.width(), rect.height());
+        let controls=state.call_controls.get();
+        place(CALL_CONTROLS,client.right-margin-px(154),margin,px(92),px(24));
+        set_text(state.control(CALL_CONTROLS),if controls {"Lettura"}else{"Controlli"});
+        set_text(state.control(99),if controls {"Controlli"}else{"Call"});
+        for id in [CALL_SCOPE,CALL_PROVIDER,CALL_TARGET,CALL_CONTEXT_LABEL,CALL_CONTEXT,CONFIRM,CONFIRM_AI,DECLINE] {visible(state.control(id),controls);}
+        for id in [CALL_TRANSCRIPT_LABEL,CALL_SUGGESTION_LABEL,CALL_TRANSCRIPT,CALL_SUGGESTION] {visible(state.control(id),!controls);}
+        let position=|id,rect:ScreenRect|place(id,rect.left,rect.top,rect.width(),rect.height());
+        let text_rects=if controls {
+            if let Ok(body)=assist_layout::call_controls_rects(client.right,client.bottom,dpi) {
             for (id, rect) in [CALL_STATUS, CALL_SCOPE, CALL_PROVIDER, CALL_TARGET, CALL_CONTEXT_LABEL, CALL_CONTEXT].into_iter().zip(body.information) {
                 // Combo height includes its native dropdown, while the closed row stays compact.
                 position(id, if id == CALL_TARGET { ScreenRect { bottom: rect.top + px(220), ..rect } } else { rect });
             }
-            for (id, rect) in [CALL_TRANSCRIPT_LABEL, CALL_SUGGESTION_LABEL].into_iter().zip(body.labels) { position(id, ScreenRect { left: rect.left + px(8), right: rect.right - px(8), ..rect }); }
-            for (id, rect) in [CALL_TRANSCRIPT, CALL_SUGGESTION].into_iter().zip(body.editors) {
+            position(CALL_RESIZE,body.resize);
+            for (id,rect) in [CONFIRM,CONFIRM_AI,DECLINE,STOP].into_iter().zip(body.buttons){position(id,rect);}
+            None
+            }else{None}
+        }else{
+            if let Ok(body)=assist_layout::call_reader_rects(client.right,client.bottom,dpi) {
+                position(CALL_STATUS,body.status);
+                position(CALL_RESIZE,body.buttons[0]);position(STOP,body.buttons[1]);
+                Some((body.labels,body.editors))
+            }else{None}
+        };
+        if let Some((labels,editors))=text_rects {
+            for (id,rect) in [CALL_TRANSCRIPT_LABEL,CALL_SUGGESTION_LABEL].into_iter().zip(labels){position(id,ScreenRect{left:rect.left+px(8),right:rect.right-px(8),..rect});}
+            for (id, rect) in [CALL_TRANSCRIPT, CALL_SUGGESTION].into_iter().zip(editors) {
                 position(id, ScreenRect { left: rect.left + px(4), right: rect.right - px(4), ..rect });
                 let child = state.control(id); let mut editor = RECT::default();
                 if unsafe { GetClientRect(child, &mut editor) }.is_ok() {
@@ -654,7 +687,6 @@ fn layout_controls(hwnd: HWND, state: &WindowState) {
                     unsafe { SendMessageW(child, EM_SETRECT, WPARAM(0), LPARAM((&editor as *const RECT) as isize)); }
                 }
             }
-            for (id, rect) in [CONFIRM, CONFIRM_AI, DECLINE, STOP].into_iter().zip(body.buttons) { position(id, rect); }
         }
     }
     state.updating.set(was_updating);
@@ -762,6 +794,8 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
     if state.destroyed.get() { return; }
     let previous = { let content = state.content.borrow(); if let Content::Call(v) = &*content { v.clone() } else { CallView::default() } };
     if state.initialized.get() && previous == *view { return; }
+    let was_controls=state.call_controls.get();
+    state.call_controls.set(call_controls_after_update(was_controls,previous.listening,view.listening));
     state.updating.set(true);
     set_text(state.control(CALL_STATUS), &format!("{} · {}", if view.listening { "ASCOLTO" } else { "Ascolto spento" }, view.status));
     set_text(state.control(CALL_SCOPE), &view.scope);
@@ -776,12 +810,17 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
     enabled(state.control(CONFIRM), view.can_listen && !view.listening && view.candidate_key.is_some());
     enabled(state.control(CONFIRM_AI), view.can_listen && !view.listening && view.candidate_key.is_some());
     enabled(state.control(DECLINE), !view.listening && view.candidate_key.is_some());
+    enabled(state.control(STOP),view.listening);
     state.content.replace(Content::Call(view.clone()));
     state.initialized.set(true);
     layout_controls(hwnd, state);
     state.updating.set(false);
+    if was_controls && !state.call_controls.get() && unsafe{GetForegroundWindow()}==hwnd {unsafe{let _=SetFocus(state.control(STOP));}}
     unsafe { let _ = InvalidateRect(hwnd, None, false); }
 }
+
+/// A queued/failed start does not hide the form; only actual capture startup does.
+fn call_controls_after_update(open:bool,was_listening:bool,listening:bool)->bool {open&&(was_listening||!listening)}
 
 fn call_action(view: &CallView, id: i32) -> Option<OverlayAction> {
     match id {
@@ -836,6 +875,7 @@ fn command(state: &WindowState, id: i32, notification: u32) {
             }
         }
         Content::Call(view) => {
+            if matches!(id,CONFIRM|CONFIRM_AI|DECLINE|CALL_TARGET) && !state.call_controls.get(){return;}
             if id == CALL_TARGET && notification == CBN_SELCHANGE && !view.listening {
                 let index = unsafe { SendMessageW(state.control(CALL_TARGET), CB_GETCURSEL, WPARAM(0), LPARAM(0)).0 };
                 if let Some(target) = usize::try_from(index).ok().and_then(|i| view.candidates.get(i)) { state.queue.push(OverlayAction::SelectCallTarget { target_key: target.key }); }
@@ -886,7 +926,7 @@ unsafe fn draw_call_button(state: &WindowState, item: &DRAWITEMSTRUCT) {
     let rect = item.rcItem;
     let _ = RoundRect(item.hDC, rect.left, rect.top, rect.right - 1, rect.bottom - 1, scale(8, state.dpi.get()), scale(8, state.dpi.get()));
     SelectObject(item.hDC, HGDIOBJ(paint.font.0)); SetBkMode(item.hDC, TRANSPARENT);
-    SetTextColor(item.hDC, if filled { paint.bg } else if disabled { paint.border_color } else { paint.fg });
+    SetTextColor(item.hDC, if filled { paint.accent_fg } else if disabled { paint.border_color } else { paint.fg });
     let mut caption = [0u16; 128]; let length = GetWindowTextW(item.hwndItem, &mut caption).max(0) as usize;
     let mut label = RECT { left: rect.left + scale(4, state.dpi.get()), right: rect.right - scale(4, state.dpi.get()), ..rect };
     DrawTextW(item.hDC, &mut caption[..length], &mut label, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -899,7 +939,8 @@ unsafe fn draw_call_button(state: &WindowState, item: &DRAWITEMSTRUCT) {
 }
 
 unsafe fn draw_call_cards(dc: HDC, state: &WindowState, client: RECT) {
-    let Ok(body) = assist_layout::call_body_rects(client.right, client.bottom, state.dpi.get()) else { return; };
+    if state.call_controls.get(){return;}
+    let Ok(body) = assist_layout::call_reader_rects(client.right, client.bottom, state.dpi.get()) else { return; };
     let saved = SaveDC(dc); if saved == 0 { return; }
     let paint = state.paint.borrow();
     SelectObject(dc, GetStockObject(DC_BRUSH)); SetDCBrushColor(dc, paint.input_bg);
@@ -933,6 +974,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
         WM_COMMAND => {
             let id = (wparam.0 & 0xFFFF) as i32; let notification = ((wparam.0 >> 16) & 0xFFFF) as u32;
             if id == CLOSE && notification == BN_CLICKED { close_action(state); let _ = DestroyWindow(hwnd); }
+            else if id==CALL_CONTROLS && notification==BN_CLICKED && state.kind==Kind::Call {
+                state.call_controls.set(!state.call_controls.get());
+                layout_controls(hwnd,state);let _=InvalidateRect(hwnd,None,true);
+            }
             else if id == CALL_RESIZE && notification == BN_CLICKED {
                 if let Some(size) = &state.resize {
                     if size.save_failed.get() { size.changed.set(true); }
@@ -1001,7 +1046,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
             if let Some(item) = (lparam.0 as *const DRAWITEMSTRUCT).as_ref() { draw_call_button(state, item); return LRESULT(1); }
         }
         WM_SIZE => { layout_controls(hwnd, state); return LRESULT(0); }
+        WM_POWERBROADCAST if state.kind==Kind::Call => {
+            state.glass.set(crate::assist_glass::apply(hwnd,state.dpi.get(),theme::graphite()));
+            let _=InvalidateRect(hwnd,None,true);return LRESULT(1);
+        }
+        WM_DWMCOMPOSITIONCHANGED | WM_THEMECHANGED if state.kind==Kind::Call => {
+            let _=update_resources(hwnd,state,state.dpi.get());return LRESULT(0);
+        }
         WM_DISPLAYCHANGE | WM_SETTINGCHANGE | WM_DPICHANGED => {
+            if message==WM_SETTINGCHANGE && state.kind==Kind::Call {let _=update_resources(hwnd,state,state.dpi.get());}
             if let Some(size) = &state.resize { size.sizing.set(false); }
             let _ = ShowWindow(hwnd, SW_HIDE);
             mark_topology_dirty(&state.queue); return LRESULT(0);
@@ -1010,7 +1063,14 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
         WM_PAINT => {
             let mut ps = PAINTSTRUCT::default(); let dc = BeginPaint(hwnd, &mut ps);
             if !dc.is_invalid() { let mut rect = RECT::default(); if GetClientRect(hwnd, &mut rect).is_ok() {
-                FillRect(dc, &rect, state.paint.borrow().background);
+                if state.kind==Kind::Call && state.glass.get() {
+                    // Expose the extended native glass frame; text editors stay
+                    // on the opaque body. No window alpha is applied to text.
+                    FillRect(dc,&rect,HBRUSH(GetStockObject(BLACK_BRUSH).0));
+                    let edge=scale(8,state.dpi.get());
+                    let body=RECT{left:edge,top:scale(40,state.dpi.get()),right:rect.right-edge,bottom:rect.bottom-edge};
+                    FillRect(dc,&body,state.paint.borrow().background);
+                }else{FillRect(dc, &rect, state.paint.borrow().background);}
                 if state.kind == Kind::Call { draw_call_cards(dc, state, rect); }
             } }
             let _ = EndPaint(hwnd, &ps); return LRESULT(0);
@@ -1025,7 +1085,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, wparam: WPARAM, lpar
             if id == STATUS { if let Ok(content) = state.content.try_borrow() { if let Content::Dashboard(view) = &*content {
                 if let Some(row) = view.rows.iter().find(|r| Some(&r.id) == view.selected_id.as_ref()) { ink = attention_color(row, ink); }
             } } }
-            if id == CALL_STATUS { if let Ok(content) = state.content.try_borrow() { if let Content::Call(view) = &*content { if view.listening { ink = COLORREF(0x005858FF); } } } }
+            if id == CALL_STATUS && !resources.high_contrast { if let Ok(content) = state.content.try_borrow() { if let Content::Call(view) = &*content { if view.listening { ink = COLORREF(0x005858FF); } } } }
             SetTextColor(dc, ink); SetBkColor(dc, if is_input { resources.input_bg } else { resources.bg });
             return LRESULT(if is_input { resources.input.0 } else { resources.background.0 } as isize);
         }
@@ -1087,6 +1147,15 @@ mod tests {
         assert_eq!(call_action(&view, CONFIRM_AI), Some(OverlayAction::ConfirmCall { candidate_key: 42, context: String::new(), with_ai: true }));
         view.listening = true; assert!(call_action(&view, CONFIRM).is_none());
         assert_eq!(call_action(&view, STOP), Some(OverlayAction::StopCall));
+    }
+    #[test]
+    fn call_controls_stay_explicit_and_only_close_after_actual_startup() {
+        assert!(!call_controls_after_update(false,false,false));
+        assert!(!call_controls_after_update(false,false,true));
+        assert!(call_controls_after_update(true,false,false));
+        assert!(!call_controls_after_update(true,false,true));
+        assert!(call_controls_after_update(true,true,true));
+        assert!(call_controls_after_update(true,true,false));
     }
     #[test]
     fn failed_window_update_closes_provider_views_and_requests_stop() {

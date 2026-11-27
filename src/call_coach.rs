@@ -167,6 +167,13 @@ impl Coach {
         if let Some(ai)=&self.ai{if let Some((sequence,text))=ai.snapshot().suggestion{if sequence>state.last_answer{let _=state.automatic_suggestion(sequence,&text);}}}
         state.suggestion.take()
     }
+    /// Reader feedback excludes model, quota and diagnostic counters.
+    pub fn feedback(&self)->String{
+        if let Some(error)=&self.ai_start_error{return format!("AI non disponibile: {error}");}
+        let Some(ai)=&self.ai else{return "In attesa del suggerimento dalla chat collegata".into();};
+        let snapshot=ai.snapshot();
+        match snapshot.last_error {Some(error)=>format!("{}: {error}",snapshot.status),None=>snapshot.status}
+    }
     pub fn status(&self)->String{
         if let Some(error)=&self.ai_start_error{return format!("AI non disponibile: {error}");}
         let Some(ai)=&self.ai else{return "Ponte manuale · richiede una chat attiva".into();};

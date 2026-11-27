@@ -25,6 +25,17 @@ pub struct AudioTarget {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CapturePhase { Starting, Listening, Stopping }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InputSignal { #[default] Waiting, Receiving, Silent, NoPackets }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct InputHealth { pub packets:u64, pub samples:u64, pub peak:u16, pub signal:InputSignal }
+impl InputHealth {
+    pub fn warning(self)->Option<&'static str> {match self.signal {
+        InputSignal::NoPackets=>Some("Nessun audio ricevuto dall'app selezionata. Verifica la sorgente Teams nei controlli; Stop e nuova conferma per cambiarla."),
+        InputSignal::Silent=>Some("Audio ricevuto ma silenzioso da 12 secondi. Può essere una pausa; se l'altra persona parla, verifica sorgente e uscita audio Teams."),
+        _=>None,
+    }}
+}
 #[derive(Clone, Debug)]
 pub struct CaptureStatus {
     pub generation: u64,
@@ -39,6 +50,8 @@ pub struct AudioSnapshot {
     pub suggested: Option<u64>,
     pub capture: Option<CaptureStatus>,
     pub last_error: Option<String>,
+    pub input_health: InputHealth,
+    pub teams_render_sessions: usize,
 }
 #[derive(Debug)]
 pub struct AudioChunk { pub generation: u64, pub pcm: Vec<i16>, pub sample_rate: u32 }
@@ -78,6 +91,7 @@ impl State {
             .ok_or("The selected audio session is no longer available")?;
         self.generation = self.generation.checked_add(1).ok_or("Audio generations exhausted")?;
         self.pcm.clear(); self.partial.clear(); self.snapshot.last_error = None;
+        self.snapshot.input_health=InputHealth::default();
         self.snapshot.capture = Some(CaptureStatus { generation: self.generation, key,
             label: target.label.clone(), pid: target.pid, state: CapturePhase::Starting });
         self.pending = Some(target);
@@ -89,11 +103,13 @@ impl State {
             status.state = CapturePhase::Stopping;
         }
         self.pending = None; self.pcm.clear(); self.partial.clear();
+        self.snapshot.input_health=InputHealth::default();
         if let Some(error) = error { self.snapshot.last_error = Some(error); }
     }
     fn finish_capture(&mut self, generation: u64) {
         if self.snapshot.capture.as_ref().is_some_and(|s| s.generation == generation) {
             self.snapshot.capture = None; self.pending = None; self.pcm.clear(); self.partial.clear();
+            self.snapshot.input_health=InputHealth::default();
         }
     }
     fn listening(&mut self, generation: u64) -> bool {
@@ -188,6 +204,23 @@ impl Drop for AudioMonitor {
             // their state until unregister/release; never free borrowed memory.
         }
     }
+}
+
+/// Opt-in metadata-only check. It has no path that calls confirm or opens audio.
+pub fn run_diagnostic()->Result<bool,String> {
+    let args:Vec<_>=std::env::args_os().skip(1).collect();
+    if !args.first().is_some_and(|arg|arg=="--call-audio-check") {return Ok(false);}
+    if args.len()!=1 {return Err("Usa --call-audio-check senza altri argomenti".into());}
+    let monitor=AudioMonitor::start()?;
+    thread::sleep(Duration::from_millis(2200));
+    let snapshot=monitor.snapshot();
+    // Counts only: no process IDs, endpoint/session identities or window titles.
+    println!("{}",serde_json::json!({"activeRenderSessions":snapshot.candidates.len(),
+        "teamsRenderSessions":snapshot.teams_render_sessions,
+        "hasSuggestedCandidate":snapshot.suggested.is_some(),"metadataError":snapshot.last_error,
+        "audioCapture":false,"microphoneOpened":false,"guiOpened":false,
+        "detection":"duck-events-or-active-teams-audio-hint","realCallVerified":false}));
+    Ok(true)
 }
 #[cfg(test)]
 mod tests {
