@@ -171,6 +171,7 @@ impl Coach {
         if let Some(error)=&self.ai_start_error{return format!("AI non disponibile: {error}");}
         let Some(ai)=&self.ai else{return "Ponte manuale · richiede una chat attiva".into();};
         let snapshot=ai.snapshot();let mut status=snapshot.status;
+        if let Some(model)=snapshot.model {status=format!("{model} · {status}");}
         if let Some(error)=snapshot.last_error{status.push_str(": ");status.push_str(&error);}
         status.push_str(&format!(" · {} richieste (avvio incluso)",snapshot.requests));
         if let(Some(input),Some(output))=(snapshot.input_tokens,snapshot.output_tokens){status.push_str(&format!(" · token noti {input} in/{output} out"));}

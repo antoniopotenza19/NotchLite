@@ -75,3 +75,7 @@ External Whisper/Silero models remain separate optional downloads.
 NotchLite 0.1.11 (2026-11-27): matte Graphite palette and native call controls,
 bounded notch geometry cache, constrained call-panel resizing and independent
 DIP size persistence. Upstream attribution and other notices retained.
+
+NotchLite 0.1.12 (2026-11-27): explicit optional CPU/Vulkan ASR profiles,
+bounded GPU startup metadata verification, pinned Turbo/Small setup and
+actual session/provider labels. No Whisper code linked into the app.

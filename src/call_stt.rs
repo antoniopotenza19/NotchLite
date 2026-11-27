@@ -15,6 +15,24 @@ pub const MAX_SAMPLES: usize = 8 * SAMPLE_RATE as usize;
 const MAX_TEXT: u64 = 8 * 1024;
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Backend { Cpu, Vulkan { device: u8 } }
+
+fn execution_settings(manifest: &serde_json::Value) -> Result<(Backend,u8),String> {
+    let threads=match manifest.get("threads") {
+        None=>2,Some(value)=>value.as_u64().filter(|n|(1..=8).contains(n)).ok_or("Invalid transcription thread count")? as u8,
+    };
+    let device=match manifest.get("device") {
+        None=>0,Some(value)=>value.as_u64().filter(|n|*n<=31).ok_or("Invalid transcription device")? as u8,
+    };
+    let backend=match manifest.get("backend").map(|value|value.as_str()) {
+        None|Some(Some("cpu"))=>Backend::Cpu,
+        Some(Some("vulkan"))=>Backend::Vulkan{device},
+        _=>return Err("Unsupported local transcription backend".into()),
+    };
+    Ok((backend,threads))
+}
+
 #[derive(Clone, Debug)]
 pub struct Configuration {
     pub executable: PathBuf,
@@ -22,6 +40,7 @@ pub struct Configuration {
     pub vad_model: Option<PathBuf>,
     pub language: String,
     pub threads: u8,
+    pub backend: Backend,
 }
 impl Configuration {
     /// Only called on explicit consent, never by a paint callback.
@@ -46,14 +65,24 @@ impl Configuration {
             None=>None,
         };
         let language=match manifest.get("language") {Some(value)=>value.as_str().ok_or("Invalid transcription language")?,None=>"it"};
-        let config = Self { executable: relative_file(&root, executable)?, model: relative_file(&root, model)?, vad_model, language: language.into(), threads: 2 };
+        let (backend,threads)=execution_settings(&manifest)?;
+        let config = Self { executable: relative_file(&root, executable)?, model: relative_file(&root, model)?, vad_model, language: language.into(), threads, backend };
         config.validate()?;
         Ok(config)
+    }
+    pub fn profile_label(&self) -> String {
+        let name=match self.model.file_name().and_then(|v|v.to_str()).unwrap_or("") {
+            "ggml-large-v3-turbo-q5_0.bin"=>"Turbo Q5_0", "ggml-small-q5_1.bin"=>"Small Q5_1",
+            "ggml-base-q5_1.bin"=>"Base Q5_1", "ggml-tiny-q5_1.bin"=>"Tiny Q5_1", _=>"locale",
+        };
+        let backend=match self.backend {Backend::Cpu=>format!("CPU {}t",self.threads),Backend::Vulkan{device}=>format!("Vulkan {device} richiesto")};
+        format!("Whisper {name} · {} · {backend}{}",self.language,if self.vad_model.is_some(){" · VAD"}else{""})
     }
     fn validate(&self) -> Result<(), String> {
         if !(1..=8).contains(&self.threads) || !valid_language(&self.language) {
             return Err("Use 1–8 CPU threads and an ISO language code or auto".into());
         }
+        if matches!(self.backend,Backend::Vulkan{device} if device>31) {return Err("Invalid transcription device".into());}
         for path in [&self.executable, &self.model].into_iter().chain(self.vad_model.iter()) {
             ensure_local_tree(path)?;
             let info = fs::symlink_metadata(path).map_err(|_| "Transcription runtime/model unavailable")?;
@@ -99,7 +128,7 @@ fn ensure_local_tree(path: &Path) -> Result<(), String> {
 }
 
 #[derive(Debug)]
-pub struct DiagnosticResult { pub text: String, pub samples: usize, pub elapsed_millis: u128 }
+pub struct DiagnosticResult { pub text: String, pub samples: usize, pub elapsed_millis: u128, pub profile: String, pub gpu_verified: bool }
 /// Explicit file-only check. Never activates an endpoint, microphone or network client.
 pub fn check_file(path: &Path, language: &str) -> Result<DiagnosticResult, String> {
     ensure_local_tree(path)?;
@@ -111,12 +140,16 @@ pub fn check_file(path: &Path, language: &str) -> Result<DiagnosticResult, Strin
     let sample_count = samples.len();
     let mut config = Configuration::discover()?;
     config.language = language.to_string();
+    let profile=config.profile_label();
+    let gpu=matches!(config.backend,Backend::Vulkan{..});
     let mut worker = SttWorker::new(config)?;
     let started = Instant::now();
     worker.submit(1, samples)?;
     loop {
         if let Some(result) = worker.poll() {
-            return Ok(DiagnosticResult { text: result.text?, samples: sample_count, elapsed_millis: started.elapsed().as_millis() });
+            let text=result.text?;
+            let gpu_verified=gpu&&!text.is_empty();
+            return Ok(DiagnosticResult { text, samples: sample_count, elapsed_millis: started.elapsed().as_millis(), profile, gpu_verified });
         }
         if started.elapsed() > PROCESS_TIMEOUT + Duration::from_secs(5) { return Err("File-only transcription check timed out".into()); }
         thread::sleep(Duration::from_millis(20));
@@ -235,6 +268,56 @@ fn run(shared: Arc<Shared>, config: Configuration) {
         shared.publish(&job, text);
     }
 }
+
+// Only startup metadata is inspected. The stream is always drained, without
+// saving logs or accumulating recognition text. VAD uses CPU independently.
+#[derive(Default)]
+struct GpuEvidence { model: bool, backend: bool, ready: bool, failed: bool, frozen: bool }
+impl GpuEvidence {
+    fn observe(&mut self,line:&str,device:u8) {
+        if self.frozen {return;}
+        if line.starts_with("whisper_vad") || line.starts_with("whisper_full:") {self.frozen=true;return;}
+        let name=format!("Vulkan{device}");
+        if line.starts_with("whisper_model_load:") && line.contains(&format!("{name} total size")) {self.model=true;}
+        if line.starts_with("whisper_backend_init_gpu:") {
+            if line.contains(&format!("using {name} backend")) {self.backend=true;}
+            else if line.contains("using ") || line.contains("no GPU") || line.contains("failed") || line.contains("not found") {self.failed=true;}
+        }
+        if line.starts_with("whisper_init_state:") {
+            if line.contains("failed") {self.failed=true;}
+            if line.contains("compute buffer") {self.ready=true;}
+        }
+        if self.confirmed() || self.failed {self.frozen=true;}
+    }
+    fn confirmed(&self)->bool {self.model&&self.backend&&self.ready&&!self.failed}
+}
+struct GpuReceipt { confirmed:Arc<AtomicBool>, failed:Arc<AtomicBool>, worker:Option<JoinHandle<()>> }
+impl GpuReceipt {
+    fn start(mut stream:std::process::ChildStderr,device:u8)->Result<Self,String> {
+        let confirmed=Arc::new(AtomicBool::new(false));let failed=Arc::new(AtomicBool::new(false));
+        let (done,bad)=(Arc::clone(&confirmed),Arc::clone(&failed));
+        let worker=thread::Builder::new().name("stt-gpu-receipt".into()).spawn(move||{
+            let mut evidence=GpuEvidence::default();let mut line=Vec::with_capacity(1024);let mut bytes=[0u8;1024];
+            loop {
+                let count=match stream.read(&mut bytes){Ok(0)|Err(_)=>break,Ok(n)=>n};
+                for &byte in &bytes[..count] {
+                    if evidence.frozen {continue;}
+                    if byte==b'\n' {
+                        evidence.observe(&String::from_utf8_lossy(&line),device);line.clear();
+                        done.store(evidence.confirmed(),Ordering::Release);bad.store(evidence.failed,Ordering::Release);
+                    } else if line.len()<1024 {line.push(byte);}
+                }
+            }
+        }).map_err(|_|"Cannot monitor the selected GPU backend")?;
+        Ok(Self{confirmed,failed,worker:Some(worker)})
+    }
+    fn join(&mut self) {if let Some(worker)=self.worker.take(){let _=worker.join();}}
+}
+impl Drop for GpuReceipt {fn drop(&mut self){self.join();}}
+fn asr_environment_override(name:&str)->bool {
+    let name=name.to_ascii_uppercase();
+    name.starts_with("GGML_VK_")||name.starts_with("GGML_VULKAN_")||name.starts_with("WHISPER_ARG_")
+}
 fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<String, String> {
     if shared.cancelled(job.epoch) { return Err("Transcription cancelled".into()); }
     // Digital silence carries no words. Never ask a language model to fill it.
@@ -243,17 +326,26 @@ fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<Stri
     write_wav(&temp.input(), &job.samples).map_err(|_| "Cannot prepare private audio segment")?;
     if shared.cancelled(job.epoch) { return Err("Transcription cancelled".into()); }
     let mut command = Command::new(&config.executable);
-    command.args(["--no-gpu", "--no-prints", "--no-timestamps", "--output-txt", "--best-of", "5", "--beam-size", "5", "--suppress-nst", "--max-context", "0", "--audio-ctx", "0"])
+    command.args(["--no-timestamps", "--output-txt", "--best-of", "5", "--beam-size", "5", "--suppress-nst", "--max-context", "0", "--audio-ctx", "0"])
         .arg("--threads").arg(config.threads.to_string()).arg("--language").arg(&config.language)
         .arg("--model").arg(&config.model).arg("--file").arg(temp.input()).arg("--output-file").arg(temp.output())
         .current_dir(&temp.0).env("GGML_BACKEND_PATH", config.executable.parent().ok_or("Invalid runtime directory")?)
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    for (key,_) in std::env::vars_os() {if asr_environment_override(&key.to_string_lossy()){command.env_remove(key);}}
+    match config.backend {
+        Backend::Cpu=>{command.args(["--no-gpu","--no-prints"]);}
+        Backend::Vulkan{device}=>{command.arg("--no-flash-attn").arg("--device").arg(device.to_string()).stderr(Stdio::piped());}
+    }
     if let Some(vad)=&config.vad_model {
         command.args(["--vad","--vad-model"]).arg(vad)
             .args(["--vad-min-speech-duration-ms","100","--vad-min-silence-duration-ms","300","--vad-speech-pad-ms","160"]);
     }
     #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
-    let mut child = command.spawn().map_err(|_| "Cannot launch local whisper.cpp CPU runtime")?;
+    let mut child = command.spawn().map_err(|_| "Cannot launch the local transcription runtime")?;
+    let mut gpu=if let Backend::Vulkan{device}=config.backend {
+        let receipt=child.stderr.take().ok_or_else(||"GPU metadata pipe unavailable".to_string()).and_then(|pipe|GpuReceipt::start(pipe,device));
+        match receipt {Ok(receipt)=>Some(receipt),Err(error)=>{let _=child.kill();let _=child.wait();return Err(error.into());}}
+    }else{None};
     {
         let mut slot = shared.child.lock().unwrap_or_else(|e| e.into_inner());
         if shared.cancelled(job.epoch) { drop(slot); let _ = child.kill(); let _ = child.wait(); return Err("Transcription cancelled".into()); }
@@ -263,13 +355,14 @@ fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<Stri
     loop {
         let status = {
             let mut slot = shared.child.lock().unwrap_or_else(|e| e.into_inner());
-            if shared.cancelled(job.epoch) || started.elapsed() > PROCESS_TIMEOUT {
+            let gpu_failed=gpu.as_ref().is_some_and(|receipt|receipt.failed.load(Ordering::Acquire));
+            if shared.cancelled(job.epoch) || started.elapsed() > PROCESS_TIMEOUT || gpu_failed {
                 let mut child = slot.take().ok_or("Transcription process unavailable")?;
                 drop(slot);
                 let _ = child.kill();
                 // Keep ownership until reaped; cleanup happens on this worker, never UI.
                 let _ = child.wait();
-                return Err(if shared.cancelled(job.epoch) { "Transcription cancelled" } else { "Local transcription exceeded 30 seconds" }.into());
+                return Err(if shared.cancelled(job.epoch) { "Transcription cancelled" } else if gpu_failed {"GPU Vulkan non inizializzata: usa Small CPU o verifica il dispositivo. Nessun ripiego CPU automatico."} else { "Local transcription exceeded 30 seconds" }.into());
             }
             match slot.as_mut().ok_or("Transcription process unavailable")?.try_wait() {
                 Ok(Some(status)) => { *slot = None; Some(status) }
@@ -277,7 +370,7 @@ fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<Stri
                 Err(_) => { let mut child=slot.take().expect("child present");drop(slot);let _ = child.kill(); let _ = child.wait();return Err("Cannot monitor local transcription process".into()); }
             }
         };
-        if let Some(status) = status { if !status.success() { return Err("Local transcription failed; check the CPU runtime/model installation".into()); } break; }
+        if let Some(status) = status { if !status.success() { return Err("Local transcription failed; check runtime/model/device configuration".into()); } break; }
         thread::sleep(Duration::from_millis(20));
     }
     if shared.cancelled(job.epoch) { return Err("Transcription cancelled".into()); }
@@ -285,6 +378,12 @@ fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<Stri
     File::open(temp.text()).map_err(|_| "Local transcription produced no text")?.take(MAX_TEXT + 1).read_to_end(&mut bytes).map_err(|_| "Cannot read transcription result")?;
     if bytes.len() as u64 > MAX_TEXT { return Err("Transcription result exceeded its text limit".into()); }
     let text = String::from_utf8(bytes).map_err(|_| "Transcription result is not UTF-8")?;
+    if let Some(receipt)=&mut gpu {
+        receipt.join();
+        if !text.trim().is_empty() && !receipt.confirmed.load(Ordering::Acquire) {
+            return Err("Il runtime non ha confermato il calcolo sul dispositivo Vulkan richiesto; nessun risultato CPU presentato come GPU.".into());
+        }
+    }
     Ok(text.trim().to_owned())
 }
 struct TempAudio(PathBuf);
@@ -388,10 +487,27 @@ mod tests {
     #[test] fn digital_silence_never_invokes_even_an_unusable_runtime() {
         let temp=TempAudio::new().unwrap();
         fs::write(temp.input(),b"not an executable").unwrap();fs::write(temp.text(),b"not a model").unwrap();
-        let config=Configuration{executable:temp.input(),model:temp.text(),vad_model:None,language:"it".into(),threads:1};
+        let config=Configuration{executable:temp.input(),model:temp.text(),vad_model:None,language:"it".into(),threads:1,backend:Backend::Cpu};
         let mut worker=SttWorker::new(config).unwrap();worker.submit_segment(4,17,vec![0;16000]).unwrap();
         let until=Instant::now()+Duration::from_secs(2);
         loop {if let Some(result)=worker.poll(){assert_eq!(result.segment_id,17);assert_eq!(result.text.unwrap(),"");break;}
             assert!(Instant::now()<until);thread::sleep(Duration::from_millis(5));}
+    }
+    #[test] fn execution_settings_are_bounded_backwards_compatible_and_not_cli_strings() {
+        use serde_json::json;
+        assert_eq!(execution_settings(&json!({})).unwrap(),(Backend::Cpu,2));
+        assert_eq!(execution_settings(&json!({"backend":"vulkan","device":1,"threads":4})).unwrap(),(Backend::Vulkan{device:1},4));
+        for value in [json!({"backend":"cuda"}),json!({"backend":null}),json!({"device":32}),json!({"device":-1}),json!({"threads":0}),json!({"threads":9}),json!({"threads":"4 --server"})] {assert!(execution_settings(&value).is_err());}
+        assert!(asr_environment_override("ggml_vk_visible_devices"));assert!(asr_environment_override("WHISPER_ARG_LANGUAGE"));assert!(!asr_environment_override("PATH"));
+    }
+    #[test] fn gpu_receipt_requires_model_and_compute_not_enumeration_or_vad_cpu() {
+        let mut receipt=GpuEvidence::default();
+        receipt.observe("ggml_vulkan: 0 = AMD GPU",0);assert!(!receipt.confirmed());
+        receipt.observe("whisper_model_load: Vulkan0 total size = 573 MB",0);
+        receipt.observe("whisper_backend_init_gpu: using Vulkan0 backend",0);assert!(!receipt.confirmed());
+        receipt.observe("whisper_init_state: compute buffer (encode) = 55 MB",0);assert!(receipt.confirmed());
+        receipt.observe("whisper_vad_init: CPU backend",0);receipt.observe("whisper_backend_init_gpu: no GPU found",0);assert!(receipt.confirmed());
+        let mut failed=GpuEvidence::default();failed.observe("whisper_backend_init_gpu: using Vulkan1 backend",0);assert!(failed.failed&&!failed.confirmed());
+        let mut no_voice=GpuEvidence::default();no_voice.observe("whisper_vad: no speech",0);assert!(!no_voice.confirmed()&&!no_voice.failed);
     }
 }

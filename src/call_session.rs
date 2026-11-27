@@ -88,6 +88,7 @@ pub struct CallSession {
     pub suggestion: String,
     pub context: String,
     coach: Option<crate::call_coach::Coach>,
+    profile_label: String,
     next_segment: u64,
     last_result: u64,
     overlaps: BTreeMap<u64, bool>,
@@ -96,10 +97,11 @@ impl CallSession {
     pub fn new(generation: u64, config: Configuration, context: String, with_ai: bool) -> Result<Self, String> {
         if context.len() > 2048 { return Err("Obiettivo della call troppo lungo".into()); }
         let notice=if config.vad_model.is_none(){Some("Riconoscimento senza rilevatore vocale: aggiorna il profilo con Setup-CallTranscription.ps1 per ridurre il testo spurio nelle pause.".into())}else{None};
+        let profile_label=config.profile_label();
         let stt = SttWorker::new(config)?;
         let coach = if with_ai { Some(crate::call_coach::Coach::start(generation, context.clone())?) } else { None };
         Ok(Self { generation, stt, segmenter: Segmenter::default(),
-            transcript: String::new(), notice, suggestion: String::new(), context, coach,
+            transcript: String::new(), notice, suggestion: String::new(), context, coach, profile_label,
             next_segment: 0, last_result: 0, overlaps: BTreeMap::new() })
     }
     pub fn push_audio(&mut self, chunk: AudioChunk) -> Result<(), String> {
@@ -141,6 +143,7 @@ impl CallSession {
         Ok(())
     }
     pub fn ai_enabled(&self) -> bool { self.coach.is_some() }
+    pub fn profile_label(&self) -> &str { &self.profile_label }
     pub fn ai_status(&self) -> Option<String> {self.coach.as_ref().map(|coach|coach.status())}
     pub fn stop(&mut self) {
         if let Some(coach) = &mut self.coach { coach.stop(); }

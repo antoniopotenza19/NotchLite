@@ -439,11 +439,12 @@ impl Assistant {
                 crate::call_audio::CapturePhase::Stopping => "Arresto ascolto…",
             }.into();
             view.scope = format!("{} · audio dell'app e processi figli; può includere più schede.", capture.label);
+            let profile=self.call_session.as_ref().map(|s|s.profile_label()).unwrap_or("Trascrizione locale");
             view.provider = if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
                 self.call_session.as_ref().and_then(|s|s.ai_status())
-                    .map(|status|format!("Whisper locale · {status}"))
-                    .unwrap_or_else(||"Whisper locale · AI in preparazione".into())
-            } else { "Solo trascrizione locale · collegamento AI spento".into() };
+                    .map(|status|format!("{profile}\n{status}"))
+                    .unwrap_or_else(||format!("{profile}\nAI in preparazione"))
+            } else { format!("{profile}\nSolo trascrizione · AI spenta") };
         }
         if let Some(notice) = &self.call_notice { view.status.push_str(" · "); view.status.push_str(notice); }
         view.transcript = if self.call_transcript.is_empty() { "La trascrizione comparirà qui dopo l'avvio e una frase pronunciata.".into() } else { self.call_transcript.clone() };

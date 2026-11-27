@@ -35,6 +35,9 @@ jobs:
           Copy-Item docs/TRY-IT.md artifact/NotchLite-portatile/README.md
           Copy-Item docs/APPEARANCE.md artifact/NotchLite-portatile/APPEARANCE.md
           Copy-Item docs/PERFORMANCE-0.1.11.md artifact/NotchLite-portatile
+          Copy-Item docs/PERFORMANCE-0.1.12.md artifact/NotchLite-portatile
+          New-Item -ItemType Directory -Force -Path artifact/NotchLite-portatile/review | Out-Null
+          Copy-Item docs/review/iteration-13 artifact/NotchLite-portatile/review -Recurse
           Copy-Item docs/DESKTOP-CLOCK.md artifact/NotchLite-portatile/DESKTOP-CLOCK.md
           Copy-Item docs/MODERN-NAVIGATION.md,docs/PHONE-SHARE.md artifact/NotchLite-portatile
           Copy-Item docs/COMPANION.md artifact/NotchLite-portatile

@@ -42,3 +42,9 @@ Le impostazioni tray/cattura della 0.1.9 hanno test puri e diagnostica OS; non �
 ## Profilo call 0.1.10
 
 Base Q5_1 e Silero VAD privilegiano la qualità rispetto al vecchio Tiny con contesto ridotto. Il costo del motore avviato per segmento e del daemon Codex è separato dal profilo base della notch. Le misure Whisper precedenti restano storiche e non descrivono questo profilo. Nessuna nuova misura della GUI durante una call reale. [Verifiche correnti](review/iteration-11/VALIDATION.json).
+
+## Trascrizione 0.1.12
+
+[Confronto italiano e risorse separate](review/iteration-13/TRANSCRIPTION.md): Turbo Q5_0 Vulkan195, no flash, 6/159 modifiche rispetto a Base39/159; mediana calda1,134s per processo. Picchi campionati195:129,95MiB working set,1726,13MiB commit privato. Prima inizializzazione preliminare199,90/1790,36MiB. Prova PDH distinta:1181,39MiB GPU dedicata e1,5MiB condivisa. Non sono valori sommabili, RAM intera app o un budget massimo. Nessuna misura della GUI durante una call. Modello rilasciato tra i segmenti.
+
+[Campione UI inattiva 0.1.12](PERFORMANCE-0.1.12.md): 61,75 MiB working set e 51,87 MiB commit privato massimi su 20,2 s, notch e pannello call visibili, ascolto spento. Non include Whisper, Codex o GPU.

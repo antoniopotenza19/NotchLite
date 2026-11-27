@@ -28,16 +28,16 @@
     "performance_measured": true,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 161,
+    "rust_tests_passed": 163,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "Native colors, geometry, source and tests reviewed without screenshots or desktop input. Native installed geometry and idle resource sample recorded separately.",
-    "performance_report": "docs/PERFORMANCE-0.1.11.md",
+    "visual_test_limitation": "No desktop input or screenshots; provider area enlarged from 42 to 62 DIP, pure layout tests passed; native wrapping unverified.",
+    "performance_report": "docs/PERFORMANCE-0.1.12.md",
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-12/VALIDATION.json",
+    "review_validation": "docs/review/iteration-13/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
-    "last_performance_measured_version": "0.1.11",
+    "last_performance_measured_version": "0.1.12",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
     "phone_pairing_implemented": true,
     "phone_pairing_real_device_tested": false,
@@ -60,8 +60,9 @@
     "installed_windows_metadata_tested": true,
     "active_chat_bridge_evidence": "docs/review/iteration-9/VALIDATION.json",
     "call_resize_implemented": true,
-    "call_backend_evidence": "docs/review/iteration-11/VALIDATION.json",
-    "performance_scope": "Installed native UI, main notch and 640x900 DIP call panel visible, fresh restart, no transcription started. Listening-off status checked after sample. Excludes Whisper, Codex daemon, other processes and GPU memory."
+    "call_backend_evidence": "docs/review/iteration-13/VALIDATION.json",
+    "performance_scope": "Installed native UI, main notch and 640x900 DIP call panel visible, fresh restart, no transcription started. Listening-off status checked after sample. Excludes Whisper, Codex daemon, other processes and GPU memory.",
+    "installed_binary_verified": true
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -125,8 +126,8 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "9214973539bfe5e91ef3293e0fbea399a7a4be1df342e70cb2168ae2eb25f650",
-    "bytes": 2420224
+    "sha256": "57302cea862737f4d900390c3781dfd604a12d28741e711654bd851a0b495ebf",
+    "bytes": 2430976
   },
   "new_source_files": [
     "src/assist.rs",
@@ -161,7 +162,7 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.11",
+  "version": "0.1.12",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",

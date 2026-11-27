@@ -97,9 +97,19 @@ del solo Whisper. La RAM della GUI durante una call reale non è misurata.
 
 I test di layout e segmentazione sono distinti dalle prove su file audio e
 dalla diagnostica del server AI. I dettagli della build corrente sono nel
-[record dell'iterazione](review/iteration-11/VALIDATION.json). Le frasi italiane
-di prova sono sintetiche: non certificano l'accuratezza della tua call Discord.
+[record dell'iterazione](review/iteration-13/VALIDATION.json). Il confronto
+italiano usa ora anche parlato pubblico FLEURS e segmentazione Rust reale;
+non certifica l'accuratezza della tua call Discord.
 Il collaudo non richiede microfono o registrazione della tua chiamata.
+
+La 0.1.12 mostra il profilo Whisper della sessione e, in modalità AI, il
+modello effettivamente restituito dal server Codex. Nell'ultima prova era
+`gpt-6.2-sol`, effort `low`; il modello segue la configurazione del server,
+non è fissato nel codice della notch. Il solo trascrittore resta locale;
+**Trascrivi + AI** invia testo al servizio con l'accesso ChatGPT già previsto.
+Il setup opzionale permette Turbo Vulkan o Small CPU: vedi
+[motore locale e misure](CALL-TRANSCRIPTION.md). Stop e nuova conferma sono
+necessari dopo un cambio profilo; il setup non avvia l'ascolto.
 
 Fonti: [process loopback Microsoft](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/),
 [ducking](https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nf-audiopolicy-iaudiosessionmanager2-registerducknotification),

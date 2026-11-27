@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if args.len() < 2 || args.len() > 3 { return Err("Usa --call-transcription-check <wav PCM16 mono 16kHz, max 8s> [lingua]".into()); }
         let language = args.get(2).map(|v| v.to_string_lossy().into_owned()).unwrap_or_else(|| "it".into());
         let result = call_stt::check_file(std::path::Path::new(&args[1]), &language)?;
-        println!("{}", serde_json::json!({"text":result.text,"samples":result.samples,"elapsedMillis":result.elapsed_millis,"audioCapture":false,"guiOpened":false}));
+        println!("{}", serde_json::json!({"text":result.text,"samples":result.samples,"elapsedMillis":result.elapsed_millis,"profile":result.profile,"gpuVerified":result.gpu_verified,"audioCapture":false,"guiOpened":false}));
         return Ok(());
     }
     if codex_diagnostic::run()? { return Ok(()); }

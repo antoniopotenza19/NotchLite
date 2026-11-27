@@ -114,7 +114,7 @@ pub fn call_body_rects(width: i32, height: i32, dpi: u32) -> Result<CallBodyRect
     };
     let mut y = margin + px(28);
     let mut information = [ScreenRect { left: 0, top: 0, right: 0, bottom: 0 }; 6];
-    for (i, (control_height, advance)) in [(36, 40), (40, 44), (42, 46), (28, 32), (20, 20), (24, 28)].into_iter().enumerate() {
+    for (i, (control_height, advance)) in [(36, 40), (40, 44), (62, 66), (28, 32), (20, 20), (24, 28)].into_iter().enumerate() {
         information[i] = rect(margin, y, content_width, px(control_height))?;
         y += px(advance);
     }
