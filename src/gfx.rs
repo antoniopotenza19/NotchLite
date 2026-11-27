@@ -177,6 +177,8 @@ struct Resources {
     formats: RefCell<HashMap<FormatKey, IDWriteTextFormat>>,
     /// Decoded images keyed by the address of their embedded bytes.
     images: RefCell<HashMap<usize, ID2D1Bitmap>>,
+    /// One current outline; repeated content frames reuse its native geometry.
+    notch: RefCell<Option<([u32; 5], ID2D1PathGeometry)>>,
 }
 
 impl Resources {
@@ -325,6 +327,7 @@ impl Gfx {
                     dash_stroke,
                     formats: RefCell::new(HashMap::new()),
                     images: RefCell::new(HashMap::new()),
+                    notch: RefCell::new(None),
                 },
             })
         }
@@ -608,10 +611,13 @@ impl DrawCtx<'_> {
     /// The notch silhouette: flush with the top edge, concave
     /// "ears" of radius `ear` flaring out at both top corners, straight sides
     /// and rounded bottom corners of radius `bottom`. `body` excludes the ears.
-    pub fn fill_notch(&mut self, body: Rect, bottom: f32, ear: f32, color: Color) {
+    pub fn fill_notch(&mut self, body: Rect, bottom: f32, ear: f32, color: Color, edge: Option<Color>) {
         let bottom = bottom.min(body.w / 2.0).min(body.h / 2.0).max(0.0);
         let ear = ear.min(body.h - bottom).max(0.0);
         let (l, r, b) = (body.x, body.right(), body.bottom());
+        let key=[l.to_bits(),r.to_bits(),b.to_bits(),bottom.to_bits(),ear.to_bits()];
+        let cached=self.res.notch.borrow().as_ref().filter(|(old,_)|*old==key).map(|(_,path)|path.clone());
+        let cache_hit=cached.is_some();
         let pt = |x: f32, y: f32| D2D_POINT_2F { x, y };
         let arc = |to: D2D_POINT_2F, radius: f32, dir: D2D1_SWEEP_DIRECTION| D2D1_ARC_SEGMENT {
             point: to,
@@ -620,7 +626,7 @@ impl DrawCtx<'_> {
             sweepDirection: dir,
             arcSize: D2D1_ARC_SIZE_SMALL,
         };
-        let geometry = (|| -> Result<ID2D1PathGeometry> {
+        let geometry = cached.map(Ok).unwrap_or_else(|| (|| -> Result<ID2D1PathGeometry> {
             unsafe {
                 let geometry = self.res.factory.CreatePathGeometry()?;
                 let sink = geometry.Open()?;
@@ -636,9 +642,11 @@ impl DrawCtx<'_> {
                 sink.Close()?;
                 Ok(geometry.cast()?)
             }
-        })();
+        })());
         if let Ok(geometry) = geometry {
+            if !cache_hit { *self.res.notch.borrow_mut()=Some((key,geometry.clone())); }
             unsafe { self.dc.FillGeometry(&geometry, self.brush(color), None) };
+            if let Some(edge)=edge { unsafe {self.dc.DrawGeometry(&geometry,self.brush(edge),0.8,&self.res.round_stroke);} }
         }
     }
 

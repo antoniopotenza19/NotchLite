@@ -42,9 +42,14 @@ pub fn work_below_main(work: ScreenRect, main: ScreenRect) -> Result<ScreenRect,
     Ok(ScreenRect { top: work.top.max(main.bottom), ..work })
 }
 
+#[cfg(test)]
 pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) -> Result<OverlayRects, PlacementError> {
+    overlay_rects_sized(work, dpi, dashboard, call, crate::call_panel_size::SizeDip::COMPACT)
+}
+
+pub fn overlay_rects_sized(work: ScreenRect, dpi: u32, dashboard: bool, call: bool, size: crate::call_panel_size::SizeDip) -> Result<OverlayRects, PlacementError> {
     if !dashboard && !call { return Ok(OverlayRects { dashboard: None, call: None }); }
-    if dpi == 0 || work.right <= work.left || work.bottom <= work.top { return Err(PlacementError::InvalidGeometry); }
+    if dpi == 0 || !size.valid() || work.right <= work.left || work.bottom <= work.top { return Err(PlacementError::InvalidGeometry); }
     let px = |dip: i64| (dip * i64::from(dpi) + 48) / 96;
     let margin = px(16).max(1);
     let gap = px(16).max(1);
@@ -58,11 +63,11 @@ pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) ->
     let (dashboard_w, call_w) = match (dashboard, call) {
         (true, true) => {
             if available_w < min_dashboard_w + min_call_w + gap { return Err(PlacementError::InsufficientSpace); }
-            let left = px(480).min(available_w - min_call_w - gap);
-            (left, px(420).min(available_w - left - gap))
+            let right = px(i64::from(size.width)).min(available_w - min_dashboard_w - gap);
+            (px(480).min(available_w - right - gap), right)
         }
         (true, false) if available_w >= min_dashboard_w => (px(480).min(available_w), 0),
-        (false, true) if available_w >= min_call_w => (0, px(420).min(available_w)),
+        (false, true) if available_w >= min_call_w => (0, px(i64::from(size.width)).min(available_w)),
         _ => return Err(PlacementError::InsufficientSpace),
     };
     let rect = |left: i64, width: i64, preferred_h: i64| -> Result<ScreenRect, PlacementError> {
@@ -78,7 +83,7 @@ pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) ->
     };
     Ok(OverlayRects {
         dashboard: if dashboard { Some(rect(i64::from(work.left) + margin, dashboard_w, 700)?) } else { None },
-        call: if call { Some(rect(i64::from(work.right) - margin - call_w, call_w, 720)?) } else { None },
+        call: if call { Some(rect(i64::from(work.right) - margin - call_w, call_w, i64::from(size.height))?) } else { None },
     })
 }
 
@@ -117,8 +122,8 @@ pub fn call_body_rects(width: i32, height: i32, dpi: u32) -> Result<CallBodyRect
     let mode_y = buttons_y - gap - px(28);
     let label_height = px(20);
     let editor_space = mode_y - y - label_height * 2 - gap * 4;
-    // Two readable lines per editor even at the smallest supported client size.
-    let transcript_height = editor_space * 3 / 5;
+    // Reserve an editor height budget; native font metrics still need UI validation.
+    let transcript_height = if editor_space < px(180) { editor_space / 2 } else { editor_space * 3 / 5 };
     let suggestion_height = editor_space - transcript_height;
     if transcript_height < px(36) || suggestion_height < px(36) { return Err(PlacementError::InsufficientSpace); }
     let transcript_label = rect(margin, y, content_width, label_height)?;
@@ -240,8 +245,8 @@ mod tests {
     fn call_controls_keep_labels_editors_and_actions_separate_at_minimum_and_portrait_sizes() {
         for dpi in [96, 120, 144, 192] {
             let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96) as i32;
-            for height in [px(480) - 2, px(720) - 2] {
-                // Native borders consume two physical pixels of the outer window.
+            for height in [px(480), px(480) - 2, px(720), px(720) - 2] {
+                // The custom call frame has a full client; retain a conservative 2px regression case.
                 let width = px(300) - 2;
                 let body = call_body_rects(width, height, dpi).unwrap();
                 let mut bottom = px(12) + px(28);
@@ -275,5 +280,34 @@ mod tests {
         assert!(!scroll_is_at_end(0, 100, 0, 99));
         assert!(scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN + 1));
         assert!(!scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN));
+    }
+    #[test]
+    fn enlarged_call_reflows_dashboard_and_keeps_top_right_anchor_at_each_dpi() {
+        use crate::call_panel_size::SizeDip;
+        let work = ScreenRect { left: -1080, top: 190, right: 0, bottom: 1920 };
+        for dpi in [96, 120, 144] {
+            let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96) as i32;
+            let compact = overlay_rects_sized(work, dpi, true, true, SizeDip::COMPACT).unwrap();
+            let wide = overlay_rects_sized(work, dpi, true, true, SizeDip::EXPANDED).unwrap();
+            let dashboard = wide.dashboard.unwrap(); let call = wide.call.unwrap();
+            assert_eq!(call.top, work.top + px(16));
+            assert_eq!(call.right, work.right - px(16));
+            assert_eq!(call.right, compact.call.unwrap().right);
+            assert!(call.width() >= compact.call.unwrap().width());
+            assert!(dashboard.width() >= px(320));
+            assert!(dashboard.right + px(16) <= call.left);
+            assert!(call.bottom <= work.bottom - px(16));
+            // The same preference reapplied by the controller cannot snap back.
+            assert_eq!(overlay_rects_sized(work, dpi, true, true, SizeDip::EXPANDED).unwrap(), wide);
+            let maximum = overlay_rects_sized(work, dpi, true, true, SizeDip { width: 4096, height: 4096 }).unwrap();
+            assert_eq!(maximum.call.unwrap().bottom, work.bottom - px(16));
+            assert!(maximum.dashboard.unwrap().width() >= px(320));
+        }
+        let alone = overlay_rects_sized(work, 96, false, true, SizeDip::EXPANDED).unwrap().call.unwrap();
+        assert_eq!(alone.width(), 640);
+        let both = overlay_rects_sized(work, 96, true, true, SizeDip::EXPANDED).unwrap();
+        assert_eq!(both.call.unwrap().width(), 640);
+        assert_eq!(both.dashboard.unwrap().width(), 392);
+        assert_eq!(overlay_rects_sized(work, 96, false, true, SizeDip { width: 299, height: 900 }), Err(PlacementError::InvalidGeometry));
     }
 }

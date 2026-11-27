@@ -114,7 +114,7 @@ const ORIGINAL: Palette = Palette {
     accent: Color::rgba(0.20, 0.86, 0.36, 1.0),
 };
 const GRAPHITE: Palette = Palette {
-    bg: rgb(0x181D26), text: rgb(0xF4F7FC), accent: rgb(0x6BDEEF),
+    bg: rgb(0x14171B), text: rgb(0xF0F3F6), accent: rgb(0xACC6DA),
 };
 const MIDNIGHT: Palette = Palette {
     bg: rgb(0x11182D), text: rgb(0xF3F1FF), accent: rgb(0xBBA6FF),
@@ -144,9 +144,10 @@ pub fn bg() -> Color { palette().bg }
 pub fn text() -> Color { palette().text }
 pub fn text_dim() -> Color { text().with_alpha(0.82) }
 pub fn text_faint() -> Color { text().with_alpha(0.68) }
-pub fn card() -> Color { text().with_alpha(0.08) }
-pub fn card_hover() -> Color { text().with_alpha(0.14) }
-pub fn border() -> Color { text().with_alpha(0.32) }
+pub fn graphite() -> bool { ACTIVE_PRESET.load(Ordering::Relaxed)==Preset::Graphite as u8 }
+pub fn card() -> Color { if graphite() { rgb(0x20242B) } else { text().with_alpha(0.08) } }
+pub fn card_hover() -> Color { if graphite() { rgb(0x292E36) } else { text().with_alpha(0.14) } }
+pub fn border() -> Color { if graphite() { rgb(0x3B4654) } else { text().with_alpha(0.32) } }
 pub fn accent() -> Color { palette().accent }
 pub fn warn() -> Color { Color::rgba(1.0, 0.72, 0.16, 1.0) }
 pub fn danger() -> Color { Color::rgba(1.0, 0.30, 0.28, 1.0) }
@@ -206,6 +207,16 @@ mod tests {
             for surface in [p.accent, p.text] {
                 assert!(contrast(p.bg, surface) >= 4.5, "{:?} selected control", preset);
             }
+        }
+    }
+
+    #[test]
+    fn graphite_reading_and_selected_icon_contrast_on_matte_surfaces() {
+        for surface in [GRAPHITE.bg,rgb(0x20242B),rgb(0x292E36)] {
+            for opacity in [1.0,0.82,0.68] {
+                assert!(contrast(over(GRAPHITE.text.with_alpha(opacity),surface),surface)>=4.5);
+            }
+            assert!(contrast(GRAPHITE.accent,surface)>=4.5);
         }
     }
 }

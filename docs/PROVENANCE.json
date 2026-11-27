@@ -25,19 +25,19 @@
     "compiled": true,
     "rust_tests_executed": true,
     "app_run": true,
-    "performance_measured": false,
+    "performance_measured": true,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 156,
+    "rust_tests_passed": 161,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "No screenshots, desktop automation or real call capture. Synthetic file tests and own-window metadata are distinct from visual/call verification.",
-    "performance_report": null,
+    "visual_test_limitation": "Native colors, geometry, source and tests reviewed without screenshots or desktop input. Native installed geometry and idle resource sample recorded separately.",
+    "performance_report": "docs/PERFORMANCE-0.1.11.md",
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-11/VALIDATION.json",
+    "review_validation": "docs/review/iteration-12/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
-    "last_performance_measured_version": "0.1.2",
+    "last_performance_measured_version": "0.1.11",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
     "phone_pairing_implemented": true,
     "phone_pairing_real_device_tested": false,
@@ -58,7 +58,10 @@
     "automatic_call_ai_implemented": true,
     "automatic_call_ai_synthetic_tested": true,
     "installed_windows_metadata_tested": true,
-    "active_chat_bridge_evidence": "docs/review/iteration-9/VALIDATION.json"
+    "active_chat_bridge_evidence": "docs/review/iteration-9/VALIDATION.json",
+    "call_resize_implemented": true,
+    "call_backend_evidence": "docs/review/iteration-11/VALIDATION.json",
+    "performance_scope": "Installed native UI, main notch and 640x900 DIP call panel visible, fresh restart, no transcription started. Listening-off status checked after sample. Excludes Whisper, Codex daemon, other processes and GPU memory."
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -122,8 +125,8 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "712c4d806ac437c529f515c8ddd830fb92db13b0a12c55559e3ab8f71f7e3256",
-    "bytes": 2407424
+    "sha256": "9214973539bfe5e91ef3293e0fbea399a7a4be1df342e70cb2168ae2eb25f650",
+    "bytes": 2420224
   },
   "new_source_files": [
     "src/assist.rs",
@@ -135,6 +138,7 @@
     "src/call_audio/capture.rs",
     "src/call_audio/windows.rs",
     "src/call_coach.rs",
+    "src/call_panel_size.rs",
     "src/call_session.rs",
     "src/call_stt.rs",
     "src/codex_bridge.rs",
@@ -157,7 +161,7 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.10",
+  "version": "0.1.11",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",

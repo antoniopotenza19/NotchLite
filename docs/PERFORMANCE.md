@@ -1,5 +1,7 @@
 # Consumi e prove
 
+La 0.1.11 ha un nuovo [campione UI inattiva](PERFORMANCE-0.1.11.md): venti secondi con notch e pannello call ampio, senza avvio della trascrizione. Le misure seguenti delle versioni precedenti restano storiche e non sono confronti controllati.
+
 La GUI 0.1.10 e l'orologio non sono stati avviati né misurati: il collegamento al daemon Codex è stato provato in modalità headless. Il daemon è un processo separato e aggiunge un costo RAM proprio; non è incluso nelle misure storiche della notch. Le ultime misure restano quelle della 0.1.2 in [PERFORMANCE-0.1.2.md](PERFORMANCE-0.1.2.md): due scenari inattivi, 60 campioni ciascuno, profilo base. Il working set medio era 43,6 MiB in background e 42,8 MiB con il pannello aperto. Il budget di 40 MiB di memoria privata non era raggiunto in tutti gli scenari. Non attribuire questi valori alla 0.1.10, all'orologio acceso o al backend telefono.
 
 I valori nella tabella seguente sono budget iniziali, non risultati misurati. Il campione della prima build in benchmarks/base-idle.json e BUILD-VALIDATION.md resta storico.

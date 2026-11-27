@@ -71,3 +71,7 @@ NotchLite 0.1.10 (2026-11-27): native main-monitor preference, non-overlapping
 assistant placement and call readability, corrected local segmentation,
 quality/VAD setup and automatic text-only Codex sampling integration.
 External Whisper/Silero models remain separate optional downloads.
+
+NotchLite 0.1.11 (2026-11-27): matte Graphite palette and native call controls,
+bounded notch geometry cache, constrained call-panel resizing and independent
+DIP size persistence. Upstream attribution and other notices retained.

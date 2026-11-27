@@ -1,0 +1,161 @@
+{
+  "version": "0.1.11",
+  "date": "2026-11-27",
+  "compiled": true,
+  "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu; LLVM-MinGW 20261117",
+  "unit_tests_passed": 161,
+  "unit_tests_failed": 0,
+  "source_sha256": {
+    "src/anim.rs": "263d4f1965252c29044de039dedd06fbc0b639416a0f91750ae90623e072e666",
+    "src/assist.rs": "1c3ea634f4172b93146c8fb60c2ecd157bfc14b856d4f9ee74a6fac90f205d0c",
+    "src/assist_layout.rs": "01c669950e2a6d3ffc4087954bd995e3081cb2556716f4419e47e530cff97ec9",
+    "src/assist_metrics.rs": "f98a4d44027b50cf6c135ed182fc842a5c54c7f52ed91fcdc70d5c7f72abf302",
+    "src/assist_overlay.rs": "d452fccc3845326aed1fd8a3c663ac905922e753d689043a8a13777aebe1d828",
+    "src/call_ai.rs": "ac9e49034d21eb209c10910065a3c865a362b6c05ca12ecc1ce00680c64e29ed",
+    "src/call_audio/capture.rs": "08cd5074597231ca744871c1dd0f00da81ab2f4ed556b4c8ba34dbccecf6cc8f",
+    "src/call_audio/windows.rs": "33f41806b9d373879f49a2e9ce46fb0a16669a0eb74b4b3f0755a9a9ac70eb03",
+    "src/call_audio.rs": "3744f2f0c72026f5f06c135b77eb9ca07b9ab598be8696ace4d7f000934168eb",
+    "src/call_coach.rs": "715a2596025ce4e216dd617993510b76b5addd5cd7ef5590567f6522afbe134f",
+    "src/call_panel_size.rs": "054cce281eadb0e98e125be5c5c8246f1f830e02738c94a91720c4f6c389e6b2",
+    "src/call_session.rs": "9f9fa204b4ec1b44449972a7975d8ed85094ece4b0f6b43eeb7881edf9902ee5",
+    "src/call_stt.rs": "0329e03b88eefa43e15d5ca4c0994da517f2959a08fddde942a1b7cfc9f2e89b",
+    "src/codex_bridge/protocol.rs": "28477d944353dff7610ea5ef256d71e949efaea1f9ae479c5755c61d90f43f01",
+    "src/codex_bridge/transport.rs": "48962b5cd8e47b55252b21a89f6a033c311519aa9a381d7da175909b506cd93d",
+    "src/codex_bridge.rs": "4c0f3e8fae22a131d683fa85d1f59b11a99385359813ebe1dd55ad1d1ff6daae",
+    "src/codex_diagnostic.rs": "4e6a418ca4ce1f804ddab8ff357ccfe8db066e42419c8a39bbf5abc4e8e8c99a",
+    "src/codex_server.rs": "8417d1cc4112a511c6a6f26f566f56517a040e262c113f3aecb35fa06e9f5168",
+    "src/desktop_clock.rs": "1bb2aec2f50188daa07af43ca23a37c8626aaae1e3d7728f84324be37dcdb667",
+    "src/droptarget.rs": "e8d7138bdf973494733a146d8482b5a78d8c93bc6159d92df6a0d927efb864ac",
+    "src/gfx.rs": "8a428448fdcf0fcbd0fc28895213ab74f148d802f611b97504c67964fc337ebf",
+    "src/http.rs": "9630ee1c4df759ff6999a99909e7342ee0fbf0a8ac606217e5a177521dd152b0",
+    "src/main.rs": "43ed2d88d384b8966d417ac9f2b42423762a0480e6288583d6c52cb8982b04d8",
+    "src/mascot.rs": "fcb7bf2d9df71e90de87f7ae95fc9614d7c9b03e231b43d195ad9ed463b03f28",
+    "src/navigation.rs": "ccd0442d643dff3a301eeb991cadba34e3bc6151e45bd830aa0dfb8a91c7f0af",
+    "src/notch_monitor.rs": "01e13422203080dd70be0560d257036bdd82d815f284a821caefc8a86c1c7ab3",
+    "src/pages/calendar.rs": "e209ed8f117fd87427a3ed0d4d9f577a21a8bdb55dee85304743759633554208",
+    "src/pages/claude.rs": "c45d8b1446fa77f9de1c931f25a471ab942654378cb97be4b432d519f59ab385",
+    "src/pages/focus.rs": "f8626d581f31dff030779aa54adb2bb7a6af1d54c2ce67c022ab66c7dfd95a54",
+    "src/pages/football.rs": "8661b26cd740c94f1513fb7ea65085e1a750bd6400c257b0e326ebb957b19934",
+    "src/pages/media.rs": "66acd8df0900d0b11bb49430dc355aa0df0d0b2c92cceac5791c1f9d511d78c6",
+    "src/pages/mod.rs": "a8f6066da0f95bd3f25b4e1046a425d311f5ba629363e31db4c0a96139fecef8",
+    "src/pages/notifications.rs": "eb154ce69c1341b08b3043ff184c2fa5de74204b862ae757a4840167c658fe52",
+    "src/pages/phone.rs": "97a1b4de6311d7313d8f89e2cab4d93a1ef84fb940b8799bd90f89187be15ff5",
+    "src/pages/settings.rs": "7e12aae8ce4399b4116cb0a5f237a672e2d87e327d1f826496d50194fa252b42",
+    "src/pages/shelf.rs": "b9245c8996ebba1b0f167fae7be056c4b363699ff9240f9188333f71ca556d16",
+    "src/pages/system.rs": "b785a5701ed78d6dc20c331422a0e0ab5804bf4ad7c4be7b38d9bd2c23f48c39",
+    "src/pages/textfield.rs": "131a1762c2d8c86dc46d3466251f4a8815db984fea6b6aeb0e95da88e2470fea",
+    "src/pages/todo.rs": "21b5feddf82377ffaec65a16b0e3fab202c27afd98fa099c41117b1055a9be5d",
+    "src/pages/weather.rs": "af31f1e8606f3e78725c59a8594db87a55361446891d3a028d66eeb8010e631b",
+    "src/phone/wire.rs": "5782749a71d89c1a05df996ad42e4928c9eb0db8d03a33845756a3ca2c8cfbd3",
+    "src/phone.rs": "69c9b3f69b09ccfa15736b0de0c957872a8185bcc73218f6501fa883d0bd193e",
+    "src/phone_qr.rs": "71e3fe501986de684254e8572e5246d26135abe7360ff6cc7a07203a5961ca94",
+    "src/profile.rs": "72d27d7a567dc0dc1115bdc765295ead34c08d22a0e4ad5ab3edbb26d83cec32",
+    "src/shell.rs": "724e6eb474656d904dccfdb3728f749633a1ce967406424eb3d01b2f59f4d452",
+    "src/store.rs": "a6ee9e04817cdd5b8c9bab89311e0399bca759dcd2e9eb9a53140222d9102f34",
+    "src/theme.rs": "d4a939ae6fe0fd6733ef65ce0a94eee5542333ae50a43ea18202007500e3d94b",
+    "src/window_policy.rs": "338f76cdbead84547c1bb4cfa252881b1eb769bc9aad22ce03895acfdc6ec645",
+    "src/worker.rs": "1cf0b0af82305f362651e29aaa1309e4ec1d26208b8d096e4cd3847ffc909ec6"
+  },
+  "build_input_sha256": {
+    "Cargo.toml": "a951060d08e8a1a0bb8b3d4ee6f21fa3115a4eeaf403adbc9587de2d50a7be62",
+    "Cargo.lock": "426b855782793298bc2067f018cb0a90b6a9a8e9f3778e7f65bc4b32ecf76ca4"
+  },
+  "binary": {
+    "sha256": "9214973539bfe5e91ef3293e0fbea399a7a4be1df342e70cb2168ae2eb25f650",
+    "bytes": 2420224
+  },
+  "app_run": true,
+  "normal_app_windows_opened": true,
+  "desktop_automation_used": false,
+  "screenshots_taken": false,
+  "graphite_matte_palette": true,
+  "graphite_contrast_tokens_tested": true,
+  "notch_geometry_cache_capacity": 1,
+  "call_size_presets_dip": {
+    "compact": [
+      420,
+      720
+    ],
+    "expanded": [
+      640,
+      900
+    ]
+  },
+  "call_resize_edges": [
+    "left",
+    "bottom",
+    "bottom-left"
+  ],
+  "call_size_persisted_separately": true,
+  "resize_does_not_reload_modules": true,
+  "native_call_buttons_preserved": true,
+  "new_dependencies": 0,
+  "new_resident_threads": 0,
+  "new_animation_timers": 0,
+  "commands": [
+    "cargo test --locked --offline",
+    "cargo build --release --locked --offline"
+  ],
+  "review": "docs/review/iteration-12/REVIEW.md",
+  "design": "docs/review/iteration-12/DESIGN.md",
+  "prior_call_backend_evidence": "docs/review/iteration-11/VALIDATION.json",
+  "performance_measured": true,
+  "package_integrity_checked": true,
+  "checks_not_run": [
+    "Native mouse dragging/keyboard focus/scroll accessibility",
+    "Native resize during a real captured Discord call",
+    "Full visual rendering inspection or screenshot",
+    "Mixed DPI/hotplug",
+    "Actual screen-sharing exclusion",
+    "Full transcription/AI memory and latency benchmark"
+  ],
+  "app_run_scope": "Installed main and expanded call windows; own-process geometry/style/control metadata only, without screenshots or mouse/keyboard input.",
+  "installed_window_geometry": {
+    "main_on_secondary": true,
+    "visible_overlay_count": 1,
+    "main_overlay_intersections": 0,
+    "call_bounds_pixels": {
+      "Left": -656,
+      "Top": 206,
+      "Right": -16,
+      "Bottom": 1106
+    },
+    "call_preset_loaded_dip": [
+      640,
+      900
+    ]
+  },
+  "native_control_check": {
+    "resize_caption": "Compatto",
+    "inactive_audio_status": true,
+    "native_sizing_style": true,
+    "client_fills_window": true,
+    "native_controls": {
+      "resize": "Button",
+      "stop": "Button",
+      "transcript": "Edit",
+      "suggestion": "Edit"
+    },
+    "mouse_or_keyboard_input_sent": false,
+    "screenshots_taken": false,
+    "native_hit_test": [
+      10,
+      15,
+      16
+    ]
+  },
+  "performance_sample": {
+    "samples": 20,
+    "elapsed_seconds": 20.243,
+    "cpu_percent_total": 0.0289,
+    "cpu_percent_one_core": 0.2316,
+    "private_mib_mean": 40.52300000000001,
+    "private_mib_sampled_max": 40.523,
+    "working_set_mib_mean": 45.91760000000001,
+    "working_set_mib_sampled_max": 45.922,
+    "threads_sampled_max": 20.0,
+    "handles_sampled_max": 1122.0,
+    "scope": "Installed native UI, main notch and 640x900 DIP call panel visible, fresh restart, no transcription started. Listening-off status checked after sample. Excludes Whisper, Codex daemon, other processes and GPU memory.",
+    "raw_local_summary_sha256": "8acbf6c5f390a4d1ec57c5bed80a5d1b113e7821620a5de0b5a6dfc0adb15ee5"
+  }
+}

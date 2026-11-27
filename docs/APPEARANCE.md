@@ -1,11 +1,11 @@
-# Preset di aspetto — 0.1.5
+# Aspetto grafite — 0.1.11
 
 Il primo incremento visivo riguarda la notch e le sue pagine native. Non applica sfondi, temi di Windows, dock o widget desktop.
 
 | Preset | Pannello | Testo | Accento |
 |---|---|---|---|
 | Original | Nero `#000000` | Bianco `#FFFFFF` | Verde originale |
-| Graphite | Ardesia `#181D26` | Bianco freddo `#F4F7FC` | Ciano `#6BDEEF` |
+| Graphite | Grafite opaca `#14171B` | Bianco freddo `#F0F3F6` | Azzurro tenue `#ACC6DA` |
 | Midnight | Blu profondo `#11182D` | Bianco lavanda `#F3F1FF` | Lavanda `#BBA6FF` |
 | Rose | Prugna scuro `#21181F` | Bianco rosato `#FFF2F7` | Rosa `#F3A4C8` |
 
@@ -29,4 +29,12 @@ Un accento già catturato da una notifica in coda conserva il colore al momento 
 
 I test verificano lettura/ciclo dei preset, conservazione delle impostazioni, fallimenti di persistenza e contrasto dei token di testo compositati sul pannello e sulla carta hover. Il contrasto dei singoli token non certifica accessibilità, sfumature delle animazioni, immagini o interfaccia completa.
 
-Per richiesta dell'utente, il prodotto viene verificato soltanto da riga di comando: nessuna apertura dell'app, automazione del desktop o modifica alle impostazioni reali del PC. Resa effettiva, selettore e messaggio di errore richiedono ancora una prova GUI. La RAM della 0.1.5 non è stata misurata; il report della 0.1.2 resta storico e non va attribuito alla nuova build. L'immagine nella documentazione è uno schema offline, non una schermata della build.
+Le verifiche iniziali della 0.1.5 furono soltanto da riga di comando; la sua RAM non fu misurata. Il report della 0.1.2 resta storico. La 0.1.11 distingue test di contrasto/geometria, apertura richiesta della copia installata con lettura dei bounds delle sue finestre e misura UI inattiva, da resa visiva e gesti del mouse ancora da collaudare. Nessuna automazione del desktop o cattura della call è necessaria. L'immagine precedente nella documentazione resta uno schema offline, non una schermata della build.
+
+## Pannello call e misure
+
+La 0.1.11 coordina pulsanti call, editor, etichette e selezione della notch con superfici opache. I pulsanti mantengono nome, focus e comportamento nativi; il focus usa un accento ad alto contrasto. La notch riutilizza una singola geometria corrente per corpo e bordo. Non sono introdotti timer di animazione o worker residenti.
+
+Nel pannello call, **Ingrandisci** propone 640×900 DIP e **Compatto** 420×720 DIP, limitati allo spazio disponibile. Il bordo sinistro, quello inferiore e l’angolo inferiore sinistro permettono misure personalizzate. La finestra resta ancorata in alto a destra sotto la notch; con la dashboard aperta le lascia almeno 320 DIP. Le dimensioni sono conservate in call-panel-size.json e vengono salvate solo a fine gesto o su azione esplicita, senza ricaricare i moduli. Un errore mostra **Non salvato** e permette di riprovare.
+
+Geometria, contrasto e compilazione sono verificati separatamente da resa visiva, focus, trascinamento reale e ridimensionamento durante una call. Il registro corrente è [iteration-12/VALIDATION.json](review/iteration-12/VALIDATION.json).

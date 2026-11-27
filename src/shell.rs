@@ -600,7 +600,7 @@ impl App {
 
         let _ = self.gfx.frame(|ctx| {
             let (bottom, ear) = corner_radii(ht);
-            ctx.fill_notch(panel, bottom, ear, theme::bg());
+            ctx.fill_notch(panel, bottom, ear, theme::bg(),theme::graphite().then(||theme::border().with_alpha(0.75)));
 
             let st = unsafe { GetLocalTime() };
             let clock = format!("{:02}:{:02}", st.wHour, st.wMinute);
@@ -616,7 +616,7 @@ impl App {
                     if !minimal {
                         ctx.opacity = collapsed_alpha * (1.0 - mascot.visibility());
                         draw_battery(ctx, Point { x: panel.x + 18.0, y: panel.h / 2.0 }, battery);
-                        ctx.text(&clock, panel, TextStyle::new(13.5, Weight::Bold, theme::text()).align(Align::Center));
+                        ctx.text(&clock, panel, TextStyle::new(13.0, Weight::Semibold, theme::text()).align(Align::Center));
                     }
                 }
                 ctx.pop_clip();
@@ -638,7 +638,7 @@ impl App {
                     let cy = nav.status.center().y;
                     draw_battery(ctx, Point { x: nav.status.x + 8.0, y: cy }, battery);
                     ctx.text(&clock, Rect::new(nav.status.x + 22.0, p.y, 42.0, theme::HEADER_H),
-                             TextStyle::new(11.5, Weight::Semibold, theme::text()));
+                             TextStyle::new(12.0, Weight::Semibold, theme::text()));
                     let date = format!("{} {} {}", DAYS[st.wDayOfWeek as usize % 7], st.wDay,
                                        MONTHS[(st.wMonth as usize).saturating_sub(1) % 12]);
                     let style = TextStyle::new(10.5, Weight::Regular, theme::text_dim());
@@ -646,22 +646,23 @@ impl App {
                     if nav.status.w >= date_w + 72.0 {
                         ctx.text(&date, Rect::new(nav.status.x + 72.0, p.y, date_w, theme::HEADER_H), style);
                     }
-                    ctx.fill_rect(nav.pill, 12.0, theme::card());
+                    ctx.fill_rect(nav.pill.inset(0.0,2.0), 11.0, theme::card());
+                    ctx.stroke_rect(nav.pill.inset(0.0,2.0),11.0,theme::border().with_alpha(0.7),0.7,false);
                     for (i, id) in page_ids.iter().enumerate() {
                         let Some(tab) = nav.tab(i) else { continue };
-                        if i == current || nav_hover == Some(i) {
-                            ctx.fill_rect(tab, 8.0, theme::card_hover());
+                        if i == current {
+                            ctx.fill_rect(tab.inset(1.0,1.0),7.0,theme::accent().with_alpha(0.14));
+                            ctx.stroke_rect(tab.inset(1.0,1.0),7.0,theme::accent().with_alpha(0.55),0.8,false);
+                        } else if nav_hover == Some(i) {
+                            ctx.fill_rect(tab.inset(1.0,1.0), 7.0, theme::card_hover());
                         }
                         let color = if i == current { theme::accent() } else { theme::text_dim() };
                         ctx.text(navigation::glyph(id), tab, TextStyle::icon(11.5, color));
-                        if i == current {
-                            ctx.fill_rect(Rect::new(tab.x + 8.0, tab.bottom() - 3.0, tab.w - 16.0, 2.0),
-                                          1.0, theme::accent());
-                        }
                     }
                     // The current/hovered section stays named even with an icon-only header.
                     ctx.text(&title, Rect::new(p.x + 12.0, p.y + 122.0, p.w - 24.0, 16.0),
-                             TextStyle::new(10.5, Weight::Regular, theme::text_dim()).align(Align::Center));
+                             TextStyle::new(11.0, Weight::Medium, theme::text_dim()).align(Align::Center));
+                    ctx.line(Point{x:p.x+22.0,y:p.y+30.5},Point{x:p.right()-22.0,y:p.y+30.5},theme::border().with_alpha(0.45),0.6);
                 } else {
                     let header = Rect::new(p.x, 0.0, p.w, theme::HEADER_H);
 

@@ -11,6 +11,7 @@ mod call_ai;
 mod call_stt;
 mod call_session;
 mod call_coach;
+mod call_panel_size;
 mod codex_bridge;
 mod codex_server;
 mod codex_diagnostic;
