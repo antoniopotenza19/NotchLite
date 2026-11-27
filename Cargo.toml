@@ -1,7 +1,7 @@
 # Modified for NotchLite: package identity and license metadata.
 [package]
 name = "notchlite"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 license = "Apache-2.0"
 description = "A native Windows notch, derived from Ada, with an opt-in feature profile"

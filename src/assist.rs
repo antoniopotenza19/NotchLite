@@ -440,14 +440,16 @@ impl Assistant {
             }.into();
             view.scope = format!("{} · audio dell'app e processi figli; può includere più schede.", capture.label);
             view.provider = if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
-                "Whisper locale · testo leggibile da una chat AI attiva".into()
+                self.call_session.as_ref().and_then(|s|s.ai_status())
+                    .map(|status|format!("Whisper locale · {status}"))
+                    .unwrap_or_else(||"Whisper locale · AI in preparazione".into())
             } else { "Solo trascrizione locale · collegamento AI spento".into() };
         }
         if let Some(notice) = &self.call_notice { view.status.push_str(" · "); view.status.push_str(notice); }
         view.transcript = if self.call_transcript.is_empty() { "La trascrizione comparirà qui dopo l'avvio e una frase pronunciata.".into() } else { self.call_transcript.clone() };
         view.suggestion = if self.call_suggestion.is_empty() {
             if self.call_session.as_ref().is_some_and(|s| s.ai_enabled()) {
-                "Ponte testo pronto. Scrivi «avvia assistenza call» nella chat Codex da usare: l'agente leggerà le frasi e pubblicherà qui i suggerimenti mentre quella chat è attiva.".into()
+                "I suggerimenti compariranno automaticamente dopo una frase trascritta. Il testo viene inviato al tuo server Codex e usa i limiti dell'abbonamento. Stato ed eventuali errori sono indicati sopra.".into()
             } else { "Modalità solo trascrizione. Per i suggerimenti termina questa sessione e scegli Trascrivi + AI.".into() }
         } else { self.call_suggestion.clone() };
         view

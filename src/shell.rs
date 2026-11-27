@@ -132,6 +132,7 @@ struct App {
     /// An explicit user request keeps the real panel open until Escape/collapse.
     explicit_panel: bool,
     capture_error: Option<i32>,
+    notch_monitor: Option<String>,
     hovering: bool,
     keyboard: bool,
     input_utf16: Utf16Input,
@@ -305,6 +306,8 @@ impl App {
             unsafe { let _=ShowWindow(self.hwnd,if self.explicit_panel { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE }); }
         }
         update_tray_tip(self.hwnd,self.capture_error.is_some());
+        self.notch_monitor=settings.get(crate::notch_monitor::KEY).cloned();
+        self.reposition_notch();
         theme::apply(theme::Preset::from_setting(settings.get(theme::PRESET_KEY).map(String::as_str)));
         if let Err(error) = self.assistant.sync(&settings, self.hwnd) {
             worker::peek(Peek { icon: "\u{E946}".into(), emoji: false, accent: theme::warn(),
@@ -345,6 +348,21 @@ impl App {
             self.redraw();
         }
         Ok(())
+    }
+
+    fn reposition_notch(&mut self) {
+        let mut rect=RECT::default();
+        if unsafe {GetWindowRect(self.hwnd,&mut rect)}.is_err() {return;}
+        match crate::notch_monitor::position(self.notch_monitor.as_deref(),rect.right-rect.left,rect.bottom-rect.top) {
+            Ok((x,y)) if x!=rect.left || y!=rect.top => {
+                self.assistant.stop_before_exit();
+                if let Err(error)=unsafe {SetWindowPos(self.hwnd,HWND::default(),x,y,0,0,SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)} {
+                    worker::peek(Peek{icon:"\u{E7F4}".into(),emoji:false,accent:theme::warn(),title:"Notch monitor".into(),body:error.to_string(),seconds:5.0});
+                }
+            }
+            Err(error) => worker::peek(Peek{icon:"\u{E7F4}".into(),emoji:false,accent:theme::warn(),title:"Notch monitor".into(),body:error.to_string(),seconds:5.0}),
+            _ => {}
+        }
     }
 
     fn set_setting(&mut self, key: &str, value: &str) {
@@ -1337,7 +1355,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             WM_APP_CMD => app.on_commands(),
             WM_APP_WAKE => app.on_wake(),
             WM_APP_OPEN => app.open_panel(),
-            WM_DISPLAYCHANGE | WM_SETTINGCHANGE => app.assistant.display_changed(),
+            WM_DISPLAYCHANGE | WM_SETTINGCHANGE => {app.reposition_notch(); app.assistant.display_changed();},
             WM_APP_TRAY => {
                 let event = (lparam.0 & 0xFFFF) as u32;
                 if event == WM_RBUTTONUP || event == WM_CONTEXTMENU {
@@ -1351,11 +1369,6 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         Some(LRESULT(0))
     });
     handled.unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) })
-}
-
-/// Development aid: `NOTCHLITE_OFFSET_X` shifts the notch horizontally (e.g. to run next to another instance).
-fn dev_offset_x() -> i32 {
-    std::env::var("NOTCHLITE_OFFSET_X").ok().and_then(|v| v.parse().ok()).unwrap_or(0)
 }
 
 /// Ask the already running instance to open its real panel.
@@ -1389,7 +1402,8 @@ pub fn run(open_panel: bool) -> Result<()> {
         let scale = GetDpiForSystem() as f32 / 96.0;
         let px_w = (theme::WINDOW_W * scale).round() as i32;
         let px_h = (theme::WINDOW_H * scale).round() as i32;
-        let screen_w = GetSystemMetrics(SM_CXSCREEN);
+        let notch_monitor=settings.get(crate::notch_monitor::KEY).cloned();
+        let (notch_x,notch_y)=crate::notch_monitor::position(notch_monitor.as_deref(),px_w,px_h)?;
 
         let interaction_style = crate::window_policy::panel_style(open_panel,crate::window_policy::current().tray_only);
         let hwnd = CreateWindowExW(
@@ -1397,8 +1411,8 @@ pub fn run(open_panel: bool) -> Result<()> {
             class,
             w!("NotchLite"),
             WS_POPUP,
-            (screen_w - px_w) / 2 + dev_offset_x(),
-            0,
+            notch_x,
+            notch_y,
             px_w,
             px_h,
             None,
@@ -1427,6 +1441,7 @@ pub fn run(open_panel: bool) -> Result<()> {
             hidden_for_fullscreen: false,
             explicit_panel: open_panel,
             capture_error: initial_capture_error,
+            notch_monitor,
             hovering: false,
             keyboard: false,
             input_utf16: Utf16Input::default(),

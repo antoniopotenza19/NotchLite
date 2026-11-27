@@ -19,6 +19,7 @@ const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct Configuration {
     pub executable: PathBuf,
     pub model: PathBuf,
+    pub vad_model: Option<PathBuf>,
     pub language: String,
     pub threads: u8,
 }
@@ -39,7 +40,13 @@ impl Configuration {
         let manifest: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "Invalid transcription configuration")?;
         let executable = manifest["executable"].as_str().ok_or("Transcription executable missing")?;
         let model = manifest["model"].as_str().ok_or("Transcription model missing")?;
-        let config = Self { executable: relative_file(&root, executable)?, model: relative_file(&root, model)?, language: "it".into(), threads: 2 };
+        // Keep legacy installations usable; setup adds the speech detector.
+        let vad_model=match manifest.get("vadModel").filter(|v|!v.is_null()) {
+            Some(value)=>Some(relative_file(&root,value.as_str().ok_or("Invalid speech detector configuration")?)?),
+            None=>None,
+        };
+        let language=match manifest.get("language") {Some(value)=>value.as_str().ok_or("Invalid transcription language")?,None=>"it"};
+        let config = Self { executable: relative_file(&root, executable)?, model: relative_file(&root, model)?, vad_model, language: language.into(), threads: 2 };
         config.validate()?;
         Ok(config)
     }
@@ -47,7 +54,7 @@ impl Configuration {
         if !(1..=8).contains(&self.threads) || !valid_language(&self.language) {
             return Err("Use 1–8 CPU threads and an ISO language code or auto".into());
         }
-        for path in [&self.executable, &self.model] {
+        for path in [&self.executable, &self.model].into_iter().chain(self.vad_model.iter()) {
             ensure_local_tree(path)?;
             let info = fs::symlink_metadata(path).map_err(|_| "Transcription runtime/model unavailable")?;
             if !info.is_file() || is_reparse(&info) { return Err("Transcription files cannot be links or directories".into()); }
@@ -230,15 +237,21 @@ fn run(shared: Arc<Shared>, config: Configuration) {
 }
 fn transcribe(shared: &Shared, config: &Configuration, job: &Job) -> Result<String, String> {
     if shared.cancelled(job.epoch) { return Err("Transcription cancelled".into()); }
+    // Digital silence carries no words. Never ask a language model to fill it.
+    if job.samples.iter().all(|sample|*sample==0) {return Ok(String::new());}
     let temp = TempAudio::new()?;
     write_wav(&temp.input(), &job.samples).map_err(|_| "Cannot prepare private audio segment")?;
     if shared.cancelled(job.epoch) { return Err("Transcription cancelled".into()); }
     let mut command = Command::new(&config.executable);
-    command.args(["--no-gpu", "--no-prints", "--no-timestamps", "--output-txt", "--no-fallback", "--best-of", "1", "--beam-size", "1", "--max-context", "0", "--audio-ctx", "512"])
+    command.args(["--no-gpu", "--no-prints", "--no-timestamps", "--output-txt", "--best-of", "5", "--beam-size", "5", "--suppress-nst", "--max-context", "0", "--audio-ctx", "0"])
         .arg("--threads").arg(config.threads.to_string()).arg("--language").arg(&config.language)
         .arg("--model").arg(&config.model).arg("--file").arg(temp.input()).arg("--output-file").arg(temp.output())
         .current_dir(&temp.0).env("GGML_BACKEND_PATH", config.executable.parent().ok_or("Invalid runtime directory")?)
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    if let Some(vad)=&config.vad_model {
+        command.args(["--vad","--vad-model"]).arg(vad)
+            .args(["--vad-min-speech-duration-ms","100","--vad-min-silence-duration-ms","300","--vad-speech-pad-ms","160"]);
+    }
     #[cfg(windows)] { use std::os::windows::process::CommandExt; command.creation_flags(0x0800_0000); }
     let mut child = command.spawn().map_err(|_| "Cannot launch local whisper.cpp CPU runtime")?;
     {
@@ -371,5 +384,14 @@ mod tests {
         for input in ["relative.wav",r"C:relative.wav",r"\\host.invalid\share\file.wav",r"\\?\UNC\host.invalid\share\file.wav"] {
             assert!(ensure_local_tree(Path::new(input)).is_err());
         }
+    }
+    #[test] fn digital_silence_never_invokes_even_an_unusable_runtime() {
+        let temp=TempAudio::new().unwrap();
+        fs::write(temp.input(),b"not an executable").unwrap();fs::write(temp.text(),b"not a model").unwrap();
+        let config=Configuration{executable:temp.input(),model:temp.text(),vad_model:None,language:"it".into(),threads:1};
+        let mut worker=SttWorker::new(config).unwrap();worker.submit_segment(4,17,vec![0;16000]).unwrap();
+        let until=Instant::now()+Duration::from_secs(2);
+        loop {if let Some(result)=worker.poll(){assert_eq!(result.segment_id,17);assert_eq!(result.text.unwrap(),"");break;}
+            assert!(Instant::now()<until);thread::sleep(Duration::from_millis(5));}
     }
 }

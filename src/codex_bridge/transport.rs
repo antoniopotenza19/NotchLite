@@ -125,6 +125,83 @@ fn would_block(error:&Error)->bool{matches!(error,Error::Io(e) if e.kind()==io::
 fn publish(shared:&Arc<Mutex<Snapshot>>,state:&State){*shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner)=state.snapshot.clone();}
 fn kill(shared:&Arc<Mutex<Option<Child>>>){if let Some(child)=shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_mut(){let _=child.kill();}}
 
+/// The same owned, bounded official proxy is used by the dashboard and call samples.
+/// It never starts/stops the shared daemon or performs account authentication itself.
+pub(crate) struct RpcTransport {
+    websocket: Option<tungstenite::WebSocket<ProxyIo>>,
+    child: Arc<Mutex<Option<Child>>>, stop: Arc<AtomicBool>,
+    writer: Option<thread::JoinHandle<()>>, progress: Arc<Progress>, received: Instant,
+}
+impl RpcTransport {
+    pub(crate) fn connect(executable:PathBuf,socket:PathBuf,cancel:&AtomicBool)->Result<Self,String>{
+        Self::connect_with_child(executable,socket,cancel,Arc::new(Mutex::new(None)))
+    }
+    fn connect_with_child(executable:PathBuf,socket:PathBuf,cancel:&AtomicBool,child:Arc<Mutex<Option<Child>>>)->Result<Self,String>{
+        let mut process=Process::new(executable).args(["app-server","proxy","--sock"]).arg(socket)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).creation_flags(0x0800_0000)
+            .spawn().map_err(|_|"Impossibile avviare il proxy ufficiale Codex".to_string())?;
+        let stdout=process.stdout.take().ok_or("Pipe Codex non disponibile")?;
+        let mut stdin=process.stdin.take().ok_or("Pipe Codex non disponibile")?;
+        *child.lock().unwrap_or_else(std::sync::PoisonError::into_inner)=Some(process);
+        let progress=Arc::new(Progress{queued:AtomicUsize::new(0),changed:AtomicU64::new(0),began:Instant::now()});
+        let stop=Arc::new(AtomicBool::new(false));
+        let mut transport=Self{websocket:None,child,stop:Arc::clone(&stop),writer:None,progress:Arc::clone(&progress),received:Instant::now()};
+        let (writer,receiver)=mpsc::sync_channel::<Vec<u8>>(4);
+        transport.writer=Some({let progress=Arc::clone(&progress);thread::Builder::new().name("codex-proxy-write".into()).spawn(move||{
+            while let Ok(bytes)=receiver.recv(){if stop.load(Ordering::Acquire){break;}let result=stdin.write_all(&bytes);progress.queued.fetch_sub(1,Ordering::AcqRel);progress.changed.store(progress.now(),Ordering::Release);if result.is_err(){break;}}
+        }).map_err(|_|"Impossibile avviare la pipe Codex".to_string())?});
+        let io=ProxyIo{stdout,writer,progress};
+        let config=WebSocketConfig::default().read_buffer_size(4096).write_buffer_size(0).max_write_buffer_size(65536).max_message_size(Some(MAX_WIRE)).max_frame_size(Some(MAX_WIRE));
+        let mut handshake=client_with_config("ws://localhost/",io,Some(config));let began=Instant::now();
+        let websocket=loop{
+            if cancel.load(Ordering::Acquire){return Err("Collegamento Codex interrotto".into());}
+            if began.elapsed()>Duration::from_secs(5){return Err("Il server Codex non risponde al collegamento locale".into());}
+            match handshake{
+                Ok((socket,_))=>break socket,
+                Err(HandshakeError::Interrupted(mid))=>{thread::sleep(Duration::from_millis(20));handshake=mid.handshake();}
+                Err(HandshakeError::Failure(_))=>return Err("Socket Codex non compatibile con il protocollo WebSocket ufficiale".into()),
+            }
+        };
+        transport.websocket=Some(websocket);Ok(transport)
+    }
+    fn check_write(&self)->Result<(),String>{
+        if self.progress.queued.load(Ordering::Acquire)>0 && self.progress.now().saturating_sub(self.progress.changed.load(Ordering::Acquire))>WRITE_DEADLINE{return Err("Scrittura al server Codex scaduta".into());}Ok(())
+    }
+    /// True means accepted exactly once, including a frame retained after WouldBlock.
+    pub(crate) fn send(&mut self,value:&serde_json::Value)->Result<bool,String>{
+        self.check_write()?;
+        let encoded=serde_json::to_string(value).map_err(|_|"Richiesta Codex non valida")?;
+        if encoded.len()>32768{return Err("Richiesta troppo grande per il pannello".into());}
+        match self.websocket.as_mut().ok_or("Proxy Codex chiuso")?.write(Message::Text(encoded.into())){
+            Ok(())=>Ok(true),Err(Error::WriteBufferFull(_))=>Ok(false),Err(e)if would_block(&e)=>Ok(true),
+            Err(_)=>Err("Collegamento Codex interrotto durante l'invio".into()),
+        }
+    }
+    pub(crate) fn flush(&mut self)->Result<(),String>{
+        self.check_write()?;if let Err(e)=self.websocket.as_mut().ok_or("Proxy Codex chiuso")?.flush(){if !would_block(&e){return Err("Collegamento Codex chiuso".into());}}Ok(())
+    }
+    pub(crate) fn read(&mut self)->Result<Option<serde_json::Value>,String>{
+        self.check_write()?;
+        for _ in 0..8{match self.websocket.as_mut().ok_or("Proxy Codex chiuso")?.read(){
+            Ok(Message::Text(text))=>{self.received=Instant::now();return serde_json::from_str(text.as_ref()).map(Some).map_err(|_|"Risposta Codex non valida".into());}
+            Ok(Message::Close(_))=>return Err("Server Codex disconnesso".into()),
+            Ok(Message::Ping(_))|Ok(Message::Pong(_))=>self.received=Instant::now(),
+            Ok(_)=>{},Err(e)if would_block(&e)=>return Ok(None),
+            Err(Error::Capacity(_))=>return Err("Evento Codex oltre il limite del pannello (512 KiB)".into()),
+            Err(_)=>return Err("Collegamento Codex non disponibile".into()),
+        }}Ok(None)
+    }
+    pub(crate) fn idle_elapsed(&self)->Duration{self.received.elapsed()}
+}
+impl Drop for RpcTransport {
+    fn drop(&mut self){
+        self.stop.store(true,Ordering::Release);kill(&self.child);
+        self.websocket=None; // disconnect the writer queue before joining it.
+        if let Some(writer)=self.writer.take(){let _=writer.join();}
+        if let Some(mut process)=self.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take(){let _=process.wait();}
+    }
+}
+
 pub(super) fn run(executable:PathBuf,socket:PathBuf,commands:mpsc::Receiver<Command>,shared:Arc<Mutex<Snapshot>>,stop:Arc<AtomicBool>,child:Arc<Mutex<Option<Child>>>) {
     let result=run_inner(executable,socket,commands,&shared,&stop,&child);
     stop.store(true,Ordering::Release);kill(&child);
@@ -135,63 +212,22 @@ pub(super) fn run(executable:PathBuf,socket:PathBuf,commands:mpsc::Receiver<Comm
     }
 }
 fn run_inner(executable:PathBuf,socket:PathBuf,commands:mpsc::Receiver<Command>,shared:&Arc<Mutex<Snapshot>>,stop:&Arc<AtomicBool>,child:&Arc<Mutex<Option<Child>>>)->Result<(),String>{
-    let mut process=Process::new(executable).args(["app-server","proxy","--sock"]).arg(socket)
-        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).creation_flags(0x0800_0000)
-        .spawn().map_err(|_|"Impossibile avviare il proxy ufficiale Codex".to_string())?;
-    let stdout=process.stdout.take().ok_or("Pipe Codex non disponibile")?;
-    let mut stdin=process.stdin.take().ok_or("Pipe Codex non disponibile")?;
-    *child.lock().unwrap_or_else(std::sync::PoisonError::into_inner)=Some(process);
-    let progress=Arc::new(Progress{queued:AtomicUsize::new(0),changed:AtomicU64::new(0),began:Instant::now()});
-    let (writer,receiver)=mpsc::sync_channel::<Vec<u8>>(4);
-    let writer_thread={let progress=Arc::clone(&progress);let stop=Arc::clone(stop);thread::Builder::new().name("codex-proxy-write".into()).spawn(move||{
-        while let Ok(bytes)=receiver.recv(){if stop.load(Ordering::Acquire){break;}let result=stdin.write_all(&bytes);progress.queued.fetch_sub(1,Ordering::AcqRel);progress.changed.store(progress.now(),Ordering::Release);if result.is_err(){break;}}
-    }).map_err(|_|"Impossibile avviare la pipe Codex".to_string())?};
-    let result=(||{
-        let io=ProxyIo{stdout,writer,progress:Arc::clone(&progress)};
-        let config=WebSocketConfig::default().read_buffer_size(4096).write_buffer_size(0).max_write_buffer_size(65536).max_message_size(Some(MAX_WIRE)).max_frame_size(Some(MAX_WIRE));
-        let mut handshake=client_with_config("ws://localhost/",io,Some(config));
-        let began=Instant::now();
-        let mut websocket=loop{
-            if stop.load(Ordering::Acquire){return Ok(());}
-            if began.elapsed()>Duration::from_secs(5){return Err("Il server Codex non risponde al collegamento locale".into());}
-            match handshake{
-                Ok((socket,_))=>break socket,
-                Err(HandshakeError::Interrupted(mid))=>{thread::sleep(Duration::from_millis(20));handshake=mid.handshake();}
-                Err(HandshakeError::Failure(_))=>return Err("Socket Codex non compatibile con il protocollo WebSocket ufficiale".into()),
-            }
-        };
-        let initial=shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
-        let mut state=State::new(initial);state.begin();
-        let mut metadata=Instant::now();let mut quota=Instant::now();let mut received=Instant::now();let mut revision=u64::MAX;
-        while !stop.load(Ordering::Acquire){
-            if progress.queued.load(Ordering::Acquire)>0 && progress.now().saturating_sub(progress.changed.load(Ordering::Acquire))>WRITE_DEADLINE{return Err("Scrittura al server Codex scaduta".into());}
-            if received.elapsed()>Duration::from_secs(45){return Err("Server Codex non raggiungibile: ricollega il pannello".into());}
-            for _ in 0..16{match commands.try_recv(){Ok(command)=>state.command(command),Err(_)=>break,}}
-            if metadata.elapsed()>=Duration::from_secs(5){let read_quota=quota.elapsed()>=Duration::from_secs(15);state.refresh(read_quota);metadata=Instant::now();if read_quota{quota=Instant::now();}}
-            for _ in 0..16{
-                let Some(value)=state.outbox.pop_front() else{break;};
-                let encoded=serde_json::to_string(&value).map_err(|_|"Richiesta Codex non valida")?;
-                if encoded.len()>32768{state.error("Richiesta troppo grande per il pannello");continue;}
-                match websocket.write(Message::Text(encoded.into())){
-                    Ok(())=>{},Err(Error::WriteBufferFull(_))=>{state.outbox.push_front(value);break;}
-                    Err(e)if would_block(&e)=>break,
-                    Err(_)=>return Err("Collegamento Codex interrotto durante l'invio".into()),
-                }
-            }
-            if let Err(e)=websocket.flush(){if !would_block(&e){return Err("Collegamento Codex chiuso".into());}}
-            for _ in 0..32{match websocket.read(){
-                Ok(Message::Text(text))=>{received=Instant::now();let value:serde_json::Value=serde_json::from_str(text.as_ref()).map_err(|_|"Risposta Codex non valida")?;state.message(value);}
-                Ok(Message::Close(_))=>return Err("Server Codex disconnesso".into()),
-                Ok(Message::Ping(_))|Ok(Message::Pong(_))=>{received=Instant::now();},
-                Ok(_)=>{},Err(e)if would_block(&e)=>break,
-                Err(Error::Capacity(_))=>return Err("Evento Codex oltre il limite del pannello (512 KiB)".into()),
-                Err(_)=>return Err("Collegamento Codex non disponibile".into()),
-            }}
-            if revision!=state.snapshot.revision{revision=state.snapshot.revision;publish(shared,&state);}
-            thread::sleep(Duration::from_millis(20));
+    let mut transport=RpcTransport::connect_with_child(executable,socket,stop,Arc::clone(child))?;
+    let initial=shared.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    let mut state=State::new(initial);state.begin();
+    let mut metadata=Instant::now();let mut quota=Instant::now();let mut revision=u64::MAX;
+    while !stop.load(Ordering::Acquire){
+        if transport.idle_elapsed()>Duration::from_secs(45){return Err("Server Codex non raggiungibile: ricollega il pannello".into());}
+        for _ in 0..16{match commands.try_recv(){Ok(command)=>state.command(command),Err(_)=>break,}}
+        if metadata.elapsed()>=Duration::from_secs(5){let read_quota=quota.elapsed()>=Duration::from_secs(15);state.refresh(read_quota);metadata=Instant::now();if read_quota{quota=Instant::now();}}
+        for _ in 0..16{
+            let Some(value)=state.outbox.pop_front()else{break;};
+            if !transport.send(&value)?{state.outbox.push_front(value);break;}
         }
-        Ok(())
-    })();
-    // Closing the child releases a stalled write; no shared daemon is stopped.
-    stop.store(true,Ordering::Release);kill(child);let _=writer_thread.join();result
+        transport.flush()?;
+        for _ in 0..32{if let Some(value)=transport.read()?{state.message(value);}else{break;}}
+        if revision!=state.snapshot.revision{revision=state.snapshot.revision;publish(shared,&state);}
+        thread::sleep(Duration::from_millis(20));
+    }
+    Ok(())
 }

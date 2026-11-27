@@ -35,6 +35,7 @@ static LAST_SCROLL: AtomicU32 = AtomicU32::new(0);
 enum Kind {
     Appearance,
     AssistantMonitor,
+    NotchMonitor,
     Feature(&'static str),
     Flag { key: &'static str, default_on: bool },
 }
@@ -46,7 +47,7 @@ struct Row {
 
 fn is_row_on(map: &BTreeMap<String, String>, kind: Kind) -> bool {
     match kind {
-        Kind::Appearance | Kind::AssistantMonitor => false,
+        Kind::Appearance | Kind::AssistantMonitor | Kind::NotchMonitor => false,
         Kind::Feature(id) => !map
             .get(pages::DISABLED_KEY)
             .is_some_and(|v| v.split(',').any(|x| x.trim() == id)),
@@ -62,7 +63,7 @@ fn changed_settings(mut map: BTreeMap<String, String>, kind: Kind) -> BTreeMap<S
             let next = theme::Preset::from_setting(map.get(theme::PRESET_KEY).map(String::as_str)).next();
             map.insert(theme::PRESET_KEY.to_string(), next.id().to_string());
         }
-        Kind::AssistantMonitor => {}, // monitor enumeration belongs to the explicit click only
+        Kind::AssistantMonitor | Kind::NotchMonitor => {}, // enumerate only on explicit click
         Kind::Feature(id) => {
             let mut disabled: Vec<String> = map
                 .get(pages::DISABLED_KEY)
@@ -119,8 +120,9 @@ fn select_next_monitor(mut map: BTreeMap<String, String>, devices: &[String]) ->
 
 impl SettingsPage {
     pub fn new(_waker: Waker) -> Self {
-        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 10);
+        let mut rows = Vec::with_capacity(pages::FEATURES.len() + 11);
         rows.push(Row { label: "Appearance", kind: Kind::Appearance });
+        rows.push(Row { label: "Notch monitor", kind: Kind::NotchMonitor });
         rows.push(Row { label: "Tray only", kind: Kind::Flag { key: crate::window_policy::TRAY_ONLY_KEY, default_on: true } });
         rows.push(Row { label: "Exclude from capture", kind: Kind::Flag { key: crate::window_policy::EXCLUDE_CAPTURE_KEY, default_on: true } });
         rows.push(Row { label: "Desktop clock", kind: Kind::Flag { key: desktop_clock::SETTING_KEY, default_on: false } });
@@ -199,7 +201,11 @@ impl SettingsPage {
                 return;
             }
         };
-        let map = if matches!(row.kind, Kind::AssistantMonitor) {
+        let map = if matches!(row.kind, Kind::NotchMonitor) {
+            match crate::notch_monitor::cycle(fresh) {
+                Ok(map)=>map,Err(_)=>{self.save_error=true;return;}
+            }
+        } else if matches!(row.kind, Kind::AssistantMonitor) {
             let devices = match crate::assist_overlay::secondary_devices() {
                 Ok(devices) => devices,
                 Err(_) => { self.save_error = true; return; }
@@ -252,12 +258,14 @@ impl Page for SettingsPage {
             if self.hover == Some(i) {
                 ctx.fill_rect(r, ROW_RADIUS, theme::card());
             }
-            if matches!(row.kind, Kind::Appearance | Kind::AssistantMonitor) {
+            if matches!(row.kind, Kind::Appearance | Kind::AssistantMonitor | Kind::NotchMonitor) {
                 let arrow = Rect::new(r.right() - PAD_X - PRESET_ARROW_W, r.y, PRESET_ARROW_W, ROW_H);
                 let value = Rect::new(arrow.x - 4.0 - PRESET_VALUE_W, r.y, PRESET_VALUE_W, ROW_H);
                 let label = Rect::new(r.x + PAD_X, r.y, (value.x - 4.0 - r.x - PAD_X).max(0.0), ROW_H);
                 let selected = if matches!(row.kind, Kind::Appearance) {
                     theme::Preset::from_setting(self.map.get(theme::PRESET_KEY).map(String::as_str)).label().to_string()
+                } else if matches!(row.kind,Kind::NotchMonitor) {
+                    crate::notch_monitor::label(&self.map)
                 } else {
                     self.map.get(crate::assist::MONITOR_KEY).filter(|v| !v.is_empty() && *v != "auto")
                         .map(|v| v.trim_start_matches("\\\\.\\").to_string()).unwrap_or_else(|| "Auto".into())

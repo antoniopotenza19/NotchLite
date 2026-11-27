@@ -9,6 +9,10 @@ const FRAME: usize = 1_600;
 const LIMIT: usize = 6 * RATE;
 const SILENCE: usize = RATE * 6 / 10;
 
+fn above_noise_floor(frame:&[i16])->bool {
+    frame.iter().map(|v|i64::from(*v).pow(2)as u64).sum::<u64>()>180*180*frame.len()as u64
+}
+
 #[derive(Default)]
 struct Segmenter { samples: Vec<i16>, lead: Vec<i16>, quiet: usize, voiced: usize, continuation: bool }
 struct Segment { samples: Vec<i16>, overlaps_previous: bool }
@@ -16,8 +20,7 @@ impl Segmenter {
     fn push(&mut self, input: &[i16]) -> Vec<Segment> {
         let mut output = Vec::new();
         for frame in input.chunks(FRAME) {
-            let energy = frame.iter().map(|v| i64::from(*v).pow(2) as u64).sum::<u64>();
-            let speech = energy > 180 * 180 * frame.len() as u64;
+            let speech = above_noise_floor(frame);
             if self.samples.is_empty() && !speech {
                 self.lead.extend_from_slice(frame);
                 let trim = self.lead.len().saturating_sub(RATE / 5);
@@ -36,13 +39,19 @@ impl Segmenter {
                     // Forced cuts overlap by 0.5s; text merging removes repeated words.
                     if full && self.quiet < SILENCE {
                         self.samples.extend_from_slice(&samples[samples.len().saturating_sub(RATE / 2)..]);
-                        self.continuation = true;
+                        // A silent retained tail shares timing, but no spoken
+                        // words. Do not let it erase a genuine repeated reply.
+                        self.continuation = self.samples.chunks(FRAME).any(above_noise_floor);
                     }
                     // Preserve short acknowledgements such as "sì" after a pause.
                     samples.resize(samples.len().max(RATE), 0);
                     output.push(Segment { samples, overlaps_previous: continuation });
                 }
-                self.voiced = if self.samples.is_empty() { 0 } else { RATE / 10 };
+                // Retained overlap has already been transcribed. It must not
+                // count as new speech, especially if a forced cut ended in
+                // silence; otherwise the following pause sends an overlap-only
+                // or entirely silent segment back to Whisper.
+                self.voiced = 0;
                 self.quiet = 0;
             }
         }
@@ -86,10 +95,11 @@ pub struct CallSession {
 impl CallSession {
     pub fn new(generation: u64, config: Configuration, context: String, with_ai: bool) -> Result<Self, String> {
         if context.len() > 2048 { return Err("Obiettivo della call troppo lungo".into()); }
+        let notice=if config.vad_model.is_none(){Some("Riconoscimento senza rilevatore vocale: aggiorna il profilo con Setup-CallTranscription.ps1 per ridurre il testo spurio nelle pause.".into())}else{None};
         let stt = SttWorker::new(config)?;
         let coach = if with_ai { Some(crate::call_coach::Coach::start(generation, context.clone())?) } else { None };
         Ok(Self { generation, stt, segmenter: Segmenter::default(),
-            transcript: String::new(), notice: None, suggestion: String::new(), context, coach,
+            transcript: String::new(), notice, suggestion: String::new(), context, coach,
             next_segment: 0, last_result: 0, overlaps: BTreeMap::new() })
     }
     pub fn push_audio(&mut self, chunk: AudioChunk) -> Result<(), String> {
@@ -131,6 +141,7 @@ impl CallSession {
         Ok(())
     }
     pub fn ai_enabled(&self) -> bool { self.coach.is_some() }
+    pub fn ai_status(&self) -> Option<String> {self.coach.as_ref().map(|coach|coach.status())}
     pub fn stop(&mut self) {
         if let Some(coach) = &mut self.coach { coach.stop(); }
         self.stt.stop(); self.segmenter = Segmenter::default(); self.overlaps.clear();
@@ -177,5 +188,35 @@ mod tests {
         for _ in 0..6 { output.extend(s.push(&[0; FRAME])); }
         assert_eq!(output.len(),1); assert_eq!(output[0].samples.len(),RATE);
         assert!(!output[0].overlaps_previous);
+    }
+    #[test]
+    fn a_pause_after_a_forced_cut_does_not_transcribe_silence_or_overlap_alone() {
+        for voiced_frames in [55,60] {
+            let mut segmenter=Segmenter::default();let mut output=Vec::new();
+            for _ in 0..voiced_frames {output.extend(segmenter.push(&[500;FRAME]));}
+            for _ in voiced_frames..60 {output.extend(segmenter.push(&[0;FRAME]));}
+            assert_eq!(output.len(),1,"One six-second segment was emitted");
+            for _ in 0..10 {assert!(segmenter.push(&[0;FRAME]).is_empty(),"Old overlap is not fresh speech");}
+            assert!(segmenter.samples.is_empty());
+            // A genuinely new short acknowledgement still reaches transcription.
+            assert!(segmenter.push(&[500;FRAME]).is_empty());
+            let mut fresh=Vec::new();for _ in 0..6 {fresh.extend(segmenter.push(&[0;FRAME]));}
+            assert_eq!(fresh.len(),1);assert!(!fresh[0].overlaps_previous);
+        }
+    }
+    #[test]
+    fn silent_overlap_does_not_erase_a_genuinely_repeated_no() {
+        let mut segmenter=Segmenter::default();let mut first=Vec::new();
+        for _ in 0..55 {first.extend(segmenter.push(&[500;FRAME]));}
+        for _ in 0..5 {first.extend(segmenter.push(&[0;FRAME]));}
+        assert_eq!(first.len(),1);assert!(segmenter.samples.iter().all(|sample|*sample==0));
+        // New speech arrives immediately after the forced cut, before the old
+        // quiet interval has had another chance to flush the retained tail.
+        assert!(segmenter.push(&[500;FRAME]).is_empty());
+        let mut next=Vec::new();for _ in 0..6 {next.extend(segmenter.push(&[0;FRAME]));}
+        assert_eq!(next.len(),1);assert!(!next[0].overlaps_previous);
+        let mut transcript="No".to_string();
+        assert_eq!(merge(&mut transcript,"no",next[0].overlaps_previous),"no");
+        assert_eq!(transcript,"No\nno");
     }
 }

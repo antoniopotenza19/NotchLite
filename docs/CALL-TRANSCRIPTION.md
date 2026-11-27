@@ -11,7 +11,15 @@ Da PowerShell, nella cartella del progetto o del pacchetto portatile:
 
 ```powershell
 .\tools\Setup-CallTranscription.ps1
+# Profilo più piccolo, con lo stesso rilevatore vocale:
+.\tools\Setup-CallTranscription.ps1 -Model tiny
 ```
+
+Il profilo iniziale ora è **Base Q5_1 + Silero VAD**, con italiano esplicito.
+`-Language en` o `-Language auto` sono disponibili se la call usa un'altra
+lingua. Il setup aggiorna `runtime.json` nella sola cartella NotchLite.
+Una sessione già confermata conserva la configurazione iniziale: per usare
+il profilo aggiornato occorrono Stop e una nuova conferma. Non riparte da sola.
 
 Lo script scarica dipendenze fissate e verifica SHA-256 **prima** di estrarre
 o usare i file. Prepara `%LOCALAPPDATA%\NotchLite\whisper\runtime.json`;
@@ -22,16 +30,21 @@ senza junction o altri reparse point nei componenti del percorso.
 Il runtime è quello ufficiale [whisper.cpp v1.9.2](https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.2),
 asset `whisper-bin-x64.zip`, circa 8,2 MB compressi. Vengono estratti soltanto
 il CLI e le DLL CPU necessarie, con scelta dell'implementazione CPU effettuata
-dal runtime. Il modello multilingue è `ggml-tiny-q5_1.bin`, 32.152.673 byte,
+dal runtime. Il modello multilingue predefinito è `ggml-base-q5_1.bin`,
+59.707.625 byte (circa 57 MiB); Tiny resta disponibile con 32.152.673 byte,
 dal [repository originale dei modelli convertiti](https://huggingface.co/ggerganov/whisper.cpp/tree/c521a4b02f422512d734391fdf08bb08c0862f68).
-I testi MIT di whisper.cpp e del modello Whisper sono conservati accanto al
+Si aggiunge il rilevatore vocale `ggml-silero-v6.2.0.bin`, 885.098 byte,
+dal [repository VAD del progetto](https://huggingface.co/ggml-org/whisper-vad/tree/9ffd54a1e1ee413ddf265af9913beaf518d1639b).
+I testi MIT di whisper.cpp, del modello Whisper e di Silero sono conservati accanto al
 runtime. Questi componenti opzionali restano processi/file separati, senza
 collegamento della libreria Whisper nel processo della notch.
 
 | File | SHA-256 |
 | --- | --- |
 | `whisper-bin-x64.zip` | `49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a` |
+| `ggml-base-q5_1.bin` | `422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898` |
 | `ggml-tiny-q5_1.bin` | `818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7` |
+| `ggml-silero-v6.2.0.bin` | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
 | `whisper-cli.exe` | `95e3c0b0e778ad9499eb0125f97c1dcf437dd9eb4ea77050b043574f93c2631d` |
 
 Il pin del modello è `c521a4b02f422512d734391fdf08bb08c0862f68`.
@@ -44,8 +57,18 @@ non vengono cancellati implicitamente.
 modello caricato. Il primo segmento avvia un worker; ogni segmento viene
 elaborato da un solo processo CLI nascosto, che termina prima del successivo.
 Il modello viene quindi rilasciato tra le inferenze. La configurazione iniziale
-usa italiano, due thread CPU, GPU disabilitata, decoding greedy e contesto
-audio 512, con segmenti PCM16 mono a 16 kHz lunghi al massimo otto secondi.
+usa italiano, due thread CPU, GPU disabilitata, beam search con cinque
+candidati e contesto audio completo (`audio-ctx 0`), con segmenti PCM16 mono
+a 16 kHz lunghi al massimo otto secondi. È stato rimosso il profilo greedy
+forzato con un solo candidato e senza fallback. Il rilevatore Silero ammette
+voce da 100 ms e aggiunge margine audio da 160 ms, per mantenere anche risposte
+brevi. Il runtime precedente senza `vadModel` rimane utilizzabile, con un
+messaggio che invita ad aggiornare il setup.
+
+Il silenzio digitale non avvia il modello. Dopo un taglio a sei secondi,
+l'overlap trattenuto non conta come nuova voce: una pausa non viene più
+inviata come un secondo segmento contenente soltanto overlap o zeri. Non
+vengono applicate blacklist di parole o frasi riconosciute.
 
 C'è spazio per un solo segmento in attesa oltre a quello in lavorazione.
 Un nuovo segmento può sostituire quello in coda; `ReplacedQueued` permette
@@ -83,7 +106,9 @@ Il 26 novembre 2026 è stato eseguito il CLI reale sulla prima porzione di sei
 secondi del [WAV pubblico fornito da whisper.cpp](https://github.com/ggml-org/whisper.cpp/blob/v1.9.2/samples/jfk.wav),
 senza playback, microfono, GUI o cattura di call. La frase iniziale inglese è
 stata riconosciuta. È una verifica funzionale limitata, non un test WER o una
-prova di accuratezza su italiano, accenti, rumore o più interlocutori.
+prova di accuratezza su italiano, accenti, rumore o più interlocutori. La
+tabella seguente descrive quel **profilo storico Tiny/contesto 512**, non il
+nuovo profilo Base/VAD.
 
 | Misura del solo processo Whisper | Risultato di una singola inferenza |
 | --- | --- |
@@ -101,6 +126,26 @@ Questi valori non dimostrano il consumo o la latenza dell'intera pipeline.
 Il precedente contesto audio completo aveva richiesto 0,675 s sullo stesso
 campione; il profilo 512 è stato scelto per segmenti brevi.
 
+## Correzione qualità del 27 novembre
+
+Per investigare errori di trascrizione su Discord sono stati generati tre
+WAV italiani sintetici con Microsoft Elsa Desktop, senza riproduzione audio
+o cattura. Sullo stesso testo di riferimento, 17 parole dopo normalizzazione
+di maiuscole e punteggiatura, il vecchio Tiny/greedy/512 ha prodotto otto
+operazioni di modifica di parola; Base/beam/full context con VAD ne ha
+prodotte due. È un confronto su tre frasi TTS, non una misura di accuratezza
+di una call reale o un WER rappresentativo dell'italiano.
+
+Nelle prove dirette, silenzio e un click sintetico non hanno prodotto testo
+con il nuovo VAD. Due ulteriori campioni sintetici, “sì” e “no”, sono stati
+riconosciuti con la soglia vocale da 100 ms. Nessun audio di Discord è stato
+ascoltato o salvato durante queste verifiche. Restano da collaudare rumore,
+compressione, accenti e volume effettivi della call dell'utente.
+
+Base richiede più memoria di Tiny: non va attribuito al nuovo profilo il
+working set della tabella storica. Il modello viene comunque caricato solo
+durante l'inferenza del segmento e rilasciato alla fine del processo.
+
 Un harness Rust indipendente che include lo stesso `src/call_stt.rs` ha
 superato sei test: linguaggio/percorso, cancellazione, sostituzione del
 risultato, WAV e pulizia TEMP, parsing del file diagnostico e rifiuto dei
@@ -117,3 +162,5 @@ separatamente nei record di validazione dell'iterazione.
 - [Licenza whisper.cpp](https://github.com/ggml-org/whisper.cpp/blob/v1.9.2/LICENSE).
 - [Scheda e licenza MIT dei modelli convertiti](https://huggingface.co/ggerganov/whisper.cpp/blob/c521a4b02f422512d734391fdf08bb08c0862f68/README.md).
 - [Licenza originale Whisper](https://github.com/openai/whisper/blob/main/LICENSE).
+- [VAD supportato dal CLI della versione fissata](https://github.com/ggml-org/whisper.cpp/blob/v1.9.2/models/download-vad-model.sh).
+- [Licenza Silero VAD](https://github.com/snakers4/silero-vad/blob/446da2ad95fc90d67a3b12e12ea3f5410b9b3ec4/LICENSE).

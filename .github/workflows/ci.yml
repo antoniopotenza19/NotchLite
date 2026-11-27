@@ -31,6 +31,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifact/NotchLite-portatile | Out-Null
           Copy-Item target/release/notchlite.exe,LICENSE,NOTICE -Destination artifact/NotchLite-portatile
+          Copy-Item assets/icon/ada.ico artifact/NotchLite-portatile/notchlite.ico
           Copy-Item docs/TRY-IT.md artifact/NotchLite-portatile/README.md
           Copy-Item docs/APPEARANCE.md artifact/NotchLite-portatile/APPEARANCE.md
           Copy-Item docs/DESKTOP-CLOCK.md artifact/NotchLite-portatile/DESKTOP-CLOCK.md
@@ -38,6 +39,7 @@ jobs:
           Copy-Item docs/COMPANION.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-DASHBOARD.md,docs/CALL-ASSISTANT.md artifact/NotchLite-portatile
           Copy-Item docs/SCREEN-PRIVACY.md artifact/NotchLite-portatile
+          Copy-Item docs/MONITORS.md artifact/NotchLite-portatile
           Copy-Item docs/CODEX-SHARED-SERVER.md artifact/NotchLite-portatile
           Copy-Item docs/CALL-LIVE.md,docs/CALL-TRANSCRIPTION.md artifact/NotchLite-portatile
           New-Item -ItemType Directory artifact/NotchLite-portatile/tools | Out-Null

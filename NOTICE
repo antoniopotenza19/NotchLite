@@ -66,3 +66,8 @@ Preset palettes and application changes are original additions to this fork.
 NotchLite 0.1.9: original native window policy, tray-only preferences and
 Windows capture-exclusion requests for this application's own windows.
 Changes retain focus for explicit panels and stop call capture before teardown.
+
+NotchLite 0.1.10 (2026-11-27): native main-monitor preference, non-overlapping
+assistant placement and call readability, corrected local segmentation,
+quality/VAD setup and automatic text-only Codex sampling integration.
+External Whisper/Silero models remain separate optional downloads.

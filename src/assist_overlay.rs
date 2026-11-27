@@ -8,6 +8,7 @@ use windows::core::{w, Error, PCWSTR, Result};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::UI::Controls::{EM_GETFIRSTVISIBLELINE, EM_LINESCROLL, EM_SETLIMITTEXT};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
@@ -52,6 +53,8 @@ const STOP: i32 = 208;
 const CALL_CONTEXT: i32 = 209;
 const CALL_CONTEXT_LABEL: i32 = 210;
 const CONFIRM_AI: i32 = 211;
+const CALL_TRANSCRIPT_LABEL: i32 = 212;
+const CALL_SUGGESTION_LABEL: i32 = 213;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OverlayConfig {
@@ -279,6 +282,10 @@ impl OverlayManager {
         let call = self.config.call_panel && self.call_view.visible && self.suppressed_call != Some(self.call_view.candidate_key);
         if !call { self.call = None; }
         if !dashboard && !call { self.availability = OverlayAvailability::Ready; return Ok(()); }
+        let available_work = match assist_layout::work_below_main(monitor.work, self.owned_main_bounds()?) {
+            Ok(work) => work,
+            Err(error) => { self.unavailable(error); return Ok(()); }
+        };
         let queue = Rc::clone(self.queue.get_or_insert_with(|| Rc::new(ActionQueue { actions: RefCell::new(VecDeque::new()), wake: Cell::new(self.wake) })));
         if dashboard && self.dashboard.is_none() { self.dashboard = Some(OverlayWindow::create(Kind::Dashboard, monitor.work, Rc::clone(&queue))?); }
         if call && self.call.is_none() { self.call = Some(OverlayWindow::create(Kind::Call, monitor.work, queue)?); }
@@ -287,7 +294,7 @@ impl OverlayManager {
         let mut dpi = [&self.dashboard, &self.call].into_iter().flatten().next()
             .map(|w| unsafe { GetDpiForWindow(w.hwnd) }).unwrap_or(96);
         for _ in 0..2 {
-            let layout = match assist_layout::overlay_rects(monitor.work, dpi, dashboard, call) {
+            let layout = match assist_layout::overlay_rects(available_work, dpi, dashboard, call) {
                 Ok(layout) => layout, Err(error) => { self.unavailable(error); return Ok(()); }
             };
             if let (Some(window), Some(rect)) = (&self.dashboard, layout.dashboard) { window.position(rect, dpi)?; }
@@ -301,10 +308,21 @@ impl OverlayManager {
         self.availability = OverlayAvailability::Ready;
         Ok(())
     }
+    fn owned_main_bounds(&self) -> Result<ScreenRect> {
+        if self.wake.is_invalid() { return Err(Error::new(E_FAIL, "Main notch window is unavailable")); }
+        let mut owner = 0;
+        if unsafe { GetWindowThreadProcessId(self.wake, Some(&mut owner)) } == 0
+            || owner != unsafe { GetCurrentProcessId() } {
+            return Err(Error::new(E_FAIL, "Main notch window is no longer owned by this app"));
+        }
+        let mut rect = RECT::default();
+        unsafe { GetWindowRect(self.wake, &mut rect)?; }
+        Ok(ScreenRect { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom })
+    }
 }
 impl Drop for OverlayManager { fn drop(&mut self) { self.shutdown(); } }
 
-fn enumerate_monitors() -> Result<Vec<Monitor>> {
+pub(crate) fn enumerate_monitors() -> Result<Vec<Monitor>> {
     unsafe extern "system" fn collect(monitor: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> BOOL {
         let mut info = MONITORINFOEXW::default(); info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
         if !GetMonitorInfoW(monitor, &mut info as *mut MONITORINFOEXW as *mut MONITORINFO).as_bool() { return false.into(); }
@@ -349,10 +367,10 @@ enum Kind { Dashboard, Call }
 enum Content { Dashboard(DashboardView), Call(CallView) }
 struct PaintResources { font: HFONT, background: HBRUSH, input: HBRUSH, bg: COLORREF, fg: COLORREF, accent: COLORREF, input_bg: COLORREF }
 impl PaintResources {
-    fn new(dpi: u32) -> Result<Self> {
+    fn new(dpi: u32, kind: Kind) -> Result<Self> {
         let bg = color(theme::bg(), theme::bg()); let fg = color(theme::text(), theme::bg());
         let input_bg = color(theme::card_hover(), theme::bg()); let accent = color(theme::accent(), theme::bg());
-        let font = unsafe { CreateFontW(-scale(13, dpi), 0, 0, 0, FW_NORMAL.0 as i32, 0, 0, 0,
+        let font = unsafe { CreateFontW(-scale(if kind == Kind::Call { 15 } else { 13 }, dpi), 0, 0, 0, FW_NORMAL.0 as i32, 0, 0, 0,
             DEFAULT_CHARSET.0 as u32, OUT_DEFAULT_PRECIS.0 as u32, CLIP_DEFAULT_PRECIS.0 as u32,
             CLEARTYPE_QUALITY.0 as u32, DEFAULT_PITCH.0 as u32, w!("Segoe UI")) };
         if font.is_invalid() { return Err(Error::new(E_FAIL, "Cannot create overlay font")); }
@@ -382,14 +400,14 @@ impl OverlayWindow {
         if QUITTING.with(Cell::get) { return Err(Error::new(E_FAIL, "Application is shutting down")); }
         let state = Box::new(WindowState { kind, destroyed: Cell::new(false), updating: Cell::new(true), initialized: Cell::new(false), dpi: Cell::new(96), queue,
             content: RefCell::new(if kind == Kind::Dashboard { Content::Dashboard(DashboardView::default()) } else { Content::Call(CallView::default()) }),
-            controls: RefCell::new(Vec::new()), paint: RefCell::new(PaintResources::new(96)?) });
+            controls: RefCell::new(Vec::new()), paint: RefCell::new(PaintResources::new(96, kind)?) });
         let hwnd = unsafe {
             let instance = GetModuleHandleW(None)?;
             let class = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: instance.into(), lpszClassName: w!("NotchLiteAssistOverlay"),
                 hCursor: LoadCursorW(None, IDC_ARROW)?, ..Default::default() };
             if RegisterClassW(&class) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS { return Err(Error::from_win32()); }
             CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT | WS_EX_TOPMOST, w!("NotchLiteAssistOverlay"),
-                if kind == Kind::Dashboard { w!("NotchLite · Codex dashboard") } else { w!("NotchLite · Call assistance") },
+                if kind == Kind::Dashboard { w!("NotchLite · Codex dashboard") } else { w!("NotchLite · Assistente call") },
                 WS_POPUP | WS_BORDER | WS_CLIPCHILDREN, work.left, work.top, 2, 2, None, None, instance,
                 Some((&*state as *const WindowState).cast()))?
         };
@@ -417,7 +435,7 @@ impl OverlayWindow {
     }
     fn palette_changed(&self) -> Result<()> { self.update_resources(self.state.dpi.get()) }
     fn update_resources(&self, dpi: u32) -> Result<()> {
-        let next = PaintResources::new(dpi)?;
+        let next = PaintResources::new(dpi, self.state.kind)?;
         // Native children must stop referring to the old HFONT before it drops.
         for (_, child) in self.state.controls.borrow().iter() { unsafe { SendMessageW(*child, WM_SETFONT, WPARAM(next.font.0 as usize), LPARAM(1)); } }
         let previous = self.state.paint.replace(next); drop(previous);
@@ -465,8 +483,8 @@ fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
         unsafe { SendMessageW(control, WM_SETFONT, WPARAM(state.paint.borrow().font.0 as usize), LPARAM(0)); }
         Ok(())
     };
-    child(99, w!("STATIC"), if state.kind == Kind::Dashboard { "Codex dashboard" } else { "Call preparation" }, 0, false)?;
-    child(CLOSE, w!("BUTTON"), "Close", 0, true)?;
+    child(99, w!("STATIC"), if state.kind == Kind::Dashboard { "Codex dashboard" } else { "Assistente call" }, 0, false)?;
+    child(CLOSE, w!("BUTTON"), if state.kind == Kind::Call { "Chiudi" } else { "Close" }, 0, true)?;
     if state.kind == Kind::Dashboard {
         for id in [CONNECTION, USAGE, RESOURCES, STATUS] { child(id, w!("STATIC"), "", 0, false)?; }
         child(THREADS, w!("COMBOBOX"), "", (CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL.0 as i32) as u32, true)?;
@@ -490,6 +508,8 @@ fn create_controls(hwnd: HWND, state: &WindowState) -> Result<()> {
         child(CALL_CONTEXT_LABEL, w!("STATIC"), "Obiettivo per l'AI (facoltativo)", 0, false)?;
         child(CALL_CONTEXT, w!("EDIT"), "", ES_AUTOHSCROLL as u32, true)?;
         unsafe { SendMessageW(state.control(CALL_CONTEXT), EM_SETLIMITTEXT, WPARAM(1000), LPARAM(0)); }
+        child(CALL_TRANSCRIPT_LABEL, w!("STATIC"), "Trascrizione", 0, false)?;
+        child(CALL_SUGGESTION_LABEL, w!("STATIC"), "Suggerimento AI", 0, false)?;
         for id in [CALL_TRANSCRIPT, CALL_SUGGESTION] { child(id, w!("EDIT"), "", (ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY) as u32 | WS_VSCROLL.0, true)?; }
         for (id, label) in [(CONFIRM, "Trascrivi"), (CONFIRM_AI, "Trascrivi + AI"), (DECLINE, "Ignora"), (STOP, "Stop")] { child(id, w!("BUTTON"), label, 0, true)?; }
     }
@@ -554,21 +574,16 @@ fn layout_controls(hwnd: HWND, state: &WindowState) {
         let button_w = ((width - gap * 3) / 4).max(1);
         for (i, id) in [SEND, OPEN_CODEX, REFRESH, SHOW_CALL].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, buttons_y, button_w, px(28)); }
     } else {
-        for (id, height) in [(CALL_STATUS, 28), (CALL_SCOPE, 32), (CALL_PROVIDER, 42)] {
-            place(id, margin, y, width, px(height)); y += px(height) + gap;
+        if let Ok(body) = assist_layout::call_body_rects(client.right, client.bottom, dpi) {
+            let position = |id, rect: ScreenRect| place(id, rect.left, rect.top, rect.width(), rect.height());
+            for (id, rect) in [CALL_STATUS, CALL_SCOPE, CALL_PROVIDER, CALL_TARGET, CALL_CONTEXT_LABEL, CALL_CONTEXT].into_iter().zip(body.information) {
+                // Combo height includes its native dropdown, while the closed row stays compact.
+                position(id, if id == CALL_TARGET { ScreenRect { bottom: rect.top + px(220), ..rect } } else { rect });
+            }
+            for (id, rect) in [CALL_TRANSCRIPT_LABEL, CALL_SUGGESTION_LABEL].into_iter().zip(body.labels) { position(id, rect); }
+            for (id, rect) in [CALL_TRANSCRIPT, CALL_SUGGESTION].into_iter().zip(body.editors) { position(id, rect); }
+            for (id, rect) in [CONFIRM, CONFIRM_AI, DECLINE, STOP].into_iter().zip(body.buttons) { position(id, rect); }
         }
-        place(CALL_TARGET, margin, y, width, px(220)); y += px(32);
-        place(CALL_CONTEXT_LABEL, margin, y, width, px(20)); y += px(20);
-        place(CALL_CONTEXT, margin, y, width, px(24)); y += px(28);
-        let buttons_y = client.bottom - margin - px(28);
-        let mode_y = buttons_y - gap - px(28);
-        let available = (mode_y - y - gap * 2).max(2);
-        let first = available / 2;
-        place(CALL_TRANSCRIPT, margin, y, width, first);
-        place(CALL_SUGGESTION, margin, y + first + gap, width, (available - first).max(1));
-        let button_w = ((width - gap) / 2).max(1);
-        for (i, id) in [CONFIRM, CONFIRM_AI].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, mode_y, button_w, px(28)); }
-        for (i, id) in [DECLINE, STOP].into_iter().enumerate() { place(id, margin + (button_w + gap) * i as i32, buttons_y, button_w, px(28)); }
     }
     state.updating.set(was_updating);
 }
@@ -581,10 +596,14 @@ fn combo_items(hwnd: HWND, values: impl IntoIterator<Item = String>, selected: O
     }
 }
 
-fn readonly_text(hwnd: HWND, value: &str) {
+fn readonly_text(hwnd: HWND, value: &str, follow_tail: bool) {
     let previous = unsafe { SendMessageW(hwnd, EM_GETFIRSTVISIBLELINE, WPARAM(0), LPARAM(0)).0 };
+    let mut scroll = SCROLLINFO { cbSize: std::mem::size_of::<SCROLLINFO>() as u32, fMask: SIF_RANGE | SIF_PAGE | SIF_POS, ..Default::default() };
+    let follow_end = follow_tail && unsafe { GetScrollInfo(hwnd, SB_VERT, &mut scroll) }.is_ok()
+        && assist_layout::scroll_is_at_end(scroll.nMin, scroll.nMax, scroll.nPage, scroll.nPos);
     set_text(hwnd, value);
-    if previous > 0 { unsafe { SendMessageW(hwnd, EM_LINESCROLL, WPARAM(0), LPARAM(previous)); } }
+    if follow_end { unsafe { SendMessageW(hwnd, WM_VSCROLL, WPARAM(SB_BOTTOM.0 as usize), LPARAM(0)); } }
+    else if previous > 0 { unsafe { SendMessageW(hwnd, EM_LINESCROLL, WPARAM(0), LPARAM(previous)); } }
 }
 
 fn apply_dashboard(hwnd: HWND, state: &WindowState, view: &DashboardView) {
@@ -613,7 +632,7 @@ fn apply_dashboard(hwnd: HWND, state: &WindowState, view: &DashboardView) {
         if !valid_question(form) { detail.push_str("This request cannot be answered here. Open Codex to continue."); }
     }
     let same_context = same_input_context(&previous, view);
-    if previous.connection != view.connection || previous.detail != view.detail || previous.approval_notice != view.approval_notice || previous.question != view.question { readonly_text(state.control(DETAIL), &detail); }
+    if previous.connection != view.connection || previous.detail != view.detail || previous.approval_notice != view.approval_notice || previous.question != view.question { readonly_text(state.control(DETAIL), &detail, false); }
     let valid_form = view.question.as_ref().filter(|form| valid_question(form) && view.selected_id.as_deref() == Some(form.key.thread_id.as_str()));
     if previous.question != view.question || !same_context {
         for index in 0..MAX_PROMPTS {
@@ -645,7 +664,7 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
     let previous = { let content = state.content.borrow(); if let Content::Call(v) = &*content { v.clone() } else { CallView::default() } };
     if state.initialized.get() && previous == *view { return; }
     state.updating.set(true);
-    set_text(state.control(CALL_STATUS), &format!("{} · {}", if view.listening { "LISTENING" } else { "Nessuna acquisizione audio" }, view.status));
+    set_text(state.control(CALL_STATUS), &format!("{} · {}", if view.listening { "ASCOLTO" } else { "Ascolto spento" }, view.status));
     set_text(state.control(CALL_SCOPE), &view.scope);
     set_text(state.control(CALL_PROVIDER), &view.provider);
     if previous.candidates != view.candidates || previous.candidate_key != view.candidate_key {
@@ -653,8 +672,8 @@ fn apply_call(hwnd: HWND, state: &WindowState, view: &CallView) {
     }
     enabled(state.control(CALL_TARGET), !view.listening && !view.candidates.is_empty());
     enabled(state.control(CALL_CONTEXT), !view.listening);
-    if previous.transcript != view.transcript { readonly_text(state.control(CALL_TRANSCRIPT), &view.transcript); }
-    if previous.suggestion != view.suggestion { readonly_text(state.control(CALL_SUGGESTION), &view.suggestion); }
+    if previous.transcript != view.transcript { readonly_text(state.control(CALL_TRANSCRIPT), &view.transcript, true); }
+    if previous.suggestion != view.suggestion { readonly_text(state.control(CALL_SUGGESTION), &view.suggestion, true); }
     enabled(state.control(CONFIRM), view.can_listen && !view.listening && view.candidate_key.is_some());
     enabled(state.control(CONFIRM_AI), view.can_listen && !view.listening && view.candidate_key.is_some());
     enabled(state.control(DECLINE), !view.listening && view.candidate_key.is_some());

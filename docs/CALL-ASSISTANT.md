@@ -1,4 +1,4 @@
-# Assistente chiamate — preview 0.1.8
+# Assistente chiamate — preview 0.1.10
 
 Abilita **Settings > Call assistant**. Il pannello in alto a destra sul
 secondo monitor propone **Trascrivi**, **Trascrivi + AI**, **Ignora** e
@@ -6,8 +6,9 @@ secondo monitor propone **Trascrivi**, **Trascrivi + AI**, **Ignora** e
 
 **Trascrivi** acquisisce l'audio riprodotto dall'app selezionata e lo
 trascrive localmente con Whisper. **Trascrivi + AI** aggiunge un ponte
-testuale che una chat AI attiva può leggere per restituire suggerimenti.
-La modalità semplice non crea quel ponte e non richiede un server Codex.
+testuale al server Codex locale condiviso, che genera suggerimenti automatici
+con l'accesso ChatGPT del CLI ufficiale. La modalità semplice non crea quel
+collegamento e non richiede un server Codex.
 
 ## Uso
 
@@ -22,22 +23,33 @@ La modalità semplice non crea quel ponte e non richiede un server Codex.
 5. **Stop** interrompe l'audio e lascia leggibile il testo. **Close** chiude
    il pannello e interrompe l'ascolto. Una nuova sessione richiede conferma.
 
+**Settings > Notch monitor** sposta la notch principale fra gli schermi.
+**Assistant monitor** sceglie separatamente il secondario dei pannelli.
+Quando sono sullo stesso schermo, il pannello call lascia libera la fascia
+della notch aperta. Titolo, font più grandi e le etichette **Trascrizione** e
+**Suggerimento AI** separano le due aree; il testo segue le frasi nuove solo
+se non hai scorso manualmente verso l'alto. [Monitor e limiti](MONITORS.md).
+
 Sul PC di sviluppo il runtime locale è già preparato. Su un altro PC serve
 il setup opzionale. Abilitare la pagina non conferma l'ascolto.
 
 ## Chat AI
 
-Nella modalità AI la trascrizione diventa leggibile da un assistente tramite
-[CALL-LIVE.md](CALL-LIVE.md). Nella chat Codex da usare, chiedi di avviare
-l'assistenza call seguendo quel documento. AGENTS.md contiene le istruzioni
-del progetto. L'agente legge le frasi e pubblica brevi risposte nel pannello
-mentre il suo turno è attivo.
+Nella modalità AI il pannello mostra preparazione, attesa del testo,
+generazione ed eventuali errori. I suggerimenti non richiedono che questa
+chat desktop continui a lavorare. Usano richieste testuali sul server Codex
+locale condiviso e consumano i limiti dell'abbonamento; i contatori disponibili
+sono indicati nello stato. Serve un server ufficiale compatibile già avviato:
+[preparazione](CODEX-SHARED-SERVER.md), [protocollo e limiti](CALL-LIVE.md).
 
-Il ponte non invoca modelli o API dell'host, non copia credenziali e non
-avvia turni quando una chat è inattiva. Il testo letto entra nel contesto
-della chat scelta. Non viene inserito automaticamente in tutte le chat
-aperte e il codice non esegue comandi contenuti nella trascrizione. L'audio
-è elaborato localmente; l'AI riceve soltanto testo attraverso la chat attiva.
+L'audio resta nel motore locale. La trascrizione recente e l'obiettivo vengono
+inviati al servizio AI soltanto dopo **Trascrivi + AI**. Il collegamento usa
+`thread/sample`, con campionamenti temporanei e nessuna esecuzione di strumenti
+dal testo della call. Il seed persistente del server contiene solo un messaggio
+statico. Non copia credenziali, non aggiunge testo alle chat già aperte e non
+usa una chiave API con fatturazione separata. Stop revoca anche le richieste AI.
+Il ponte manuale per un agente attivo rimane una funzione distinta, documentata
+in CALL-LIVE.md.
 
 Le chat già aperte nel server incorporato di Codex Desktop restano distinte
 dalla dashboard su server condiviso descritta in CODEX-DASHBOARD.md. Il
@@ -83,13 +95,11 @@ del solo Whisper. La RAM della GUI durante una call reale non è misurata.
 
 ## Verifiche
 
-Test sintetici e build sono riusciti. Separatamente, un WAV pubblico di sei
-secondi è stato trascritto dal prodotto; il testo è stato letto da questa
-chat e un suggerimento è tornato al ponte locale. Questa prova copre STT e
-IPC. Cattura di una call reale, rilevamento delle singole app, resa dei
-pannelli e DPI richiedono ancora il collaudo dell'utente. Durante lo sviluppo
-non sono stati usati desktop, microfono o acquisizione reale. Esiti nel
-[record corrente](review/iteration-9/VALIDATION.json).
+I test di layout e segmentazione sono distinti dalle prove su file audio e
+dalla diagnostica del server AI. I dettagli della build corrente sono nel
+[record dell'iterazione](review/iteration-11/VALIDATION.json). Le frasi italiane
+di prova sono sintetiche: non certificano l'accuratezza della tua call Discord.
+Il collaudo non richiede microfono o registrazione della tua chiamata.
 
 Fonti: [process loopback Microsoft](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/),
 [ducking](https://learn.microsoft.com/en-us/windows/win32/api/audiopolicy/nf-audiopolicy-iaudiosessionmanager2-registerducknotification),

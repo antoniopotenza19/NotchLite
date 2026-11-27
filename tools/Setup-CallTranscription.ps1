@@ -1,32 +1,46 @@
 # Original NotchLite helper. SPDX-License-Identifier: Apache-2.0
 # Downloads pinned local CPU dependencies only. Never captures audio or starts a server.
 [CmdletBinding()]
-param([string]$DestinationRoot = (Join-Path $env:LOCALAPPDATA 'NotchLite\whisper'))
+param(
+    [string]$DestinationRoot = (Join-Path $env:LOCALAPPDATA 'NotchLite\whisper'),
+    [ValidateSet('base','tiny')][string]$Model = 'base',
+    [ValidatePattern('^(auto|[a-z]{2,3})$')][string]$Language = 'it'
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $version = 'v1.9.2'
 $archiveSha = '49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a'
 $modelRevision = 'c521a4b02f422512d734391fdf08bb08c0862f68'
-$modelSha = '818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7'
+$modelFile = 'ggml-' + $Model + '-q5_1.bin'
+$modelSha = if ($Model -eq 'base') { '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898' } else { '818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7' }
+$vadRevision = '9ffd54a1e1ee413ddf265af9913beaf518d1639b'
+$vadFile = 'ggml-silero-v6.2.0.bin'
+$vadSha = '2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987'
 $archiveUrl = 'https://github.com/ggml-org/whisper.cpp/releases/download/' + $version + '/whisper-bin-x64.zip'
-$modelUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/' + $modelRevision + '/ggml-tiny-q5_1.bin'
+$modelUrl = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/' + $modelRevision + '/' + $modelFile
+$vadUrl = 'https://huggingface.co/ggml-org/whisper-vad/resolve/' + $vadRevision + '/' + $vadFile
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { throw 'This pinned runtime requires Windows x64.' }
 if ($DestinationRoot -notmatch '^[A-Za-z]:[\\/]') { throw 'Choose an absolute local directory.' }
 $root = [IO.Path]::GetFullPath($DestinationRoot)
 if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($root)).DriveType -eq [IO.DriveType]::Network) { throw 'Choose a local disk.' }
 function Assert-NoReparse([string]$Path) {
     $candidate = $Path
+    $parents = [Collections.Generic.List[string]]::new()
     while ($candidate) {
+        $parents.Insert(0,$candidate)
+        $candidate = Split-Path -Parent $candidate
+    }
+    foreach ($candidate in $parents) {
         if (Test-Path -LiteralPath $candidate) {
             if ((Get-Item -LiteralPath $candidate -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Runtime paths cannot contain reparse points.' }
         }
-        $candidate = Split-Path -Parent $candidate
     }
 }
 Assert-NoReparse $root
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 $archive = Join-Path $root 'whisper-bin-x64-v1.9.2.zip'
-$model = Join-Path $root 'ggml-tiny-q5_1.bin'
+$modelPath = Join-Path $root $modelFile
+$vad = Join-Path $root $vadFile
 function Get-Verified([string]$Url, [string]$Path, [string]$Sha) {
     Assert-NoReparse $Path
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -40,7 +54,8 @@ function Get-Verified([string]$Url, [string]$Path, [string]$Sha) {
     if ((Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Sha) { throw 'Existing download SHA-256 mismatch; nothing is executed.' }
 }
 Get-Verified $archiveUrl $archive $archiveSha
-Get-Verified $modelUrl $model $modelSha
+Get-Verified $modelUrl $modelPath $modelSha
+Get-Verified $vadUrl $vad $vadSha
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $packageName = 'cpu-' + $version + '-' + [Guid]::NewGuid().ToString('N')
 $packageRoot = Join-Path $root $packageName
@@ -70,6 +85,7 @@ MIT License
 
 whisper.cpp: Copyright (c) 2023-2026 The ggml authors
 Whisper model: Copyright (c) 2022 OpenAI
+Silero VAD: Copyright (c) 2020-present Silero Team
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -90,7 +106,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 '@
 [IO.File]::WriteAllText((Join-Path $packageRoot 'LICENSE-MIT.txt'), $license)
-$manifest = [ordered]@{ version=$version; executable=($packageName + '/whisper-cli.exe'); model='ggml-tiny-q5_1.bin'; archiveSha256=$archiveSha; modelSha256=$modelSha; modelRevision=$modelRevision; archiveUrl=$archiveUrl; modelUrl=$modelUrl }
+$manifest = [ordered]@{ version=$version; executable=($packageName + '/whisper-cli.exe'); model=$modelFile; vadModel=$vadFile; language=$Language; archiveSha256=$archiveSha; modelSha256=$modelSha; modelRevision=$modelRevision; archiveUrl=$archiveUrl; modelUrl=$modelUrl; vadModelSha256=$vadSha; vadModelRevision=$vadRevision; vadModelUrl=$vadUrl }
 $manifestTemp = Join-Path $root ('runtime-' + [Guid]::NewGuid().ToString('N') + '.json')
 [IO.File]::WriteAllText($manifestTemp, ($manifest | ConvertTo-Json))
 Assert-NoReparse (Join-Path $root 'runtime.json')

@@ -1,6 +1,6 @@
 {
   "project": "NotchLite",
-  "prepared_date": "2026-11-26",
+  "prepared_date": "2026-11-27",
   "upstream": {
     "repository": "https://github.com/Yemresalcan/ada-notch",
     "revision": "5a1e17f040672a71685872b1b234e01d02a47bb5",
@@ -28,14 +28,14 @@
     "performance_measured": false,
     "package_integrity_checked": true,
     "measurement_script_smoke_test": "passed on PowerShell process; not an app benchmark",
-    "rust_tests_passed": 137,
+    "rust_tests_passed": 156,
     "visual_interaction_tested": false,
-    "visual_test_limitation": "No GUI, real HWND affinity or screen-sharing check. OS metadata and public WAV STT tested headlessly; call text-bridge evidence retained from iteration 9.",
+    "visual_test_limitation": "No screenshots, desktop automation or real call capture. Synthetic file tests and own-window metadata are distinct from visual/call verification.",
     "performance_report": null,
     "compiler": "rustc 1.100.0 x86_64-pc-windows-gnu",
     "previous_build_app_run": false,
     "previous_build_performance_measured": false,
-    "review_validation": "docs/review/iteration-10/VALIDATION.json",
+    "review_validation": "docs/review/iteration-11/VALIDATION.json",
     "last_gui_observed_version": "0.1.2",
     "last_performance_measured_version": "0.1.2",
     "historical_performance_report": "docs/PERFORMANCE-0.1.2.md",
@@ -54,7 +54,11 @@
     "call_ai_text_bridge_available": true,
     "privacy_metadata_tested": true,
     "capture_exclusion_implemented": true,
-    "screen_sharing_tested": false
+    "screen_sharing_tested": false,
+    "automatic_call_ai_implemented": true,
+    "automatic_call_ai_synthetic_tested": true,
+    "installed_windows_metadata_tested": true,
+    "active_chat_bridge_evidence": "docs/review/iteration-9/VALIDATION.json"
   },
   "modified_upstream_files": [
     ".github/workflows/ci.yml",
@@ -118,14 +122,15 @@
     "tools/set_icon.py"
   ],
   "binary": {
-    "sha256": "a7d64ea8b795eda07dc938e2b41c09576e89616a87b25fffe08922086f821693",
-    "bytes": 2345472
+    "sha256": "712c4d806ac437c529f515c8ddd830fb92db13b0a12c55559e3ab8f71f7e3256",
+    "bytes": 2407424
   },
   "new_source_files": [
     "src/assist.rs",
     "src/assist_layout.rs",
     "src/assist_metrics.rs",
     "src/assist_overlay.rs",
+    "src/call_ai.rs",
     "src/call_audio.rs",
     "src/call_audio/capture.rs",
     "src/call_audio/windows.rs",
@@ -139,6 +144,7 @@
     "src/codex_server.rs",
     "src/desktop_clock.rs",
     "src/navigation.rs",
+    "src/notch_monitor.rs",
     "src/pages/phone.rs",
     "src/phone.rs",
     "src/phone/wire.rs",
@@ -151,7 +157,7 @@
     "project-local Ponytail implementation and review guidance with MIT provenance",
     "three-agent review with independent verification"
   ],
-  "version": "0.1.9",
+  "version": "0.1.10",
   "visual_reference": {
     "url": "https://www.instagram.com/p/DgEXHeggzMe/",
     "product": "Noci Share",
@@ -168,9 +174,10 @@
   "external_call_transcription": {
     "project": "https://github.com/ggml-org/whisper.cpp",
     "version": "1.9.2",
-    "model": "ggml-tiny-q5_1.bin",
+    "model": "ggml-base-q5_1.bin (quality default); tiny-q5_1 optional",
     "license": "MIT",
     "runtime_or_model_redistributed_in_portable": false,
-    "setup": "tools/Setup-CallTranscription.ps1"
+    "setup": "tools/Setup-CallTranscription.ps1",
+    "vad": "ggml-silero-v6.2.0.bin; optional setup download, MIT"
   }
 }

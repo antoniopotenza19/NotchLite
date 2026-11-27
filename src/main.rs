@@ -7,6 +7,7 @@ mod assist_layout;
 mod assist_metrics;
 mod assist_overlay;
 mod call_audio;
+mod call_ai;
 mod call_stt;
 mod call_session;
 mod call_coach;
@@ -19,6 +20,7 @@ mod gfx;
 mod http;
 mod mascot;
 mod navigation;
+mod notch_monitor;
 mod pages;
 mod phone;
 mod phone_qr;
@@ -37,6 +39,7 @@ use windows::Win32::UI::HiDpi::{SetProcessDpiAwarenessContext, DPI_AWARENESS_CON
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if window_policy::run_diagnostic()? { return Ok(()); }
+    if call_ai::run_diagnostic()? { return Ok(()); }
     if call_coach::run_diagnostic()? { return Ok(()); }
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     if args.first().is_some_and(|a| a == "--call-transcription-check") {

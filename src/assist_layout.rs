@@ -28,6 +28,20 @@ pub fn select_secondary<'a>(monitors: &'a [Monitor], requested: Option<&str>) ->
     Ok(selected)
 }
 
+/// Reserve the full native notch height, not its animated/clipped capsule.
+/// Bounds are already physical screen pixels; overlay_rects adds the DPI gap.
+pub fn work_below_main(work: ScreenRect, main: ScreenRect) -> Result<ScreenRect, PlacementError> {
+    if work.right <= work.left || work.bottom <= work.top
+        || main.right <= main.left || main.bottom <= main.top {
+        return Err(PlacementError::InvalidGeometry);
+    }
+    let intersects = main.left < work.right && main.right > work.left
+        && main.top < work.bottom && main.bottom > work.top;
+    if !intersects { return Ok(work); }
+    if main.bottom >= work.bottom { return Err(PlacementError::InsufficientSpace); }
+    Ok(ScreenRect { top: work.top.max(main.bottom), ..work })
+}
+
 pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) -> Result<OverlayRects, PlacementError> {
     if !dashboard && !call { return Ok(OverlayRects { dashboard: None, call: None }); }
     if dpi == 0 || work.right <= work.left || work.bottom <= work.top { return Err(PlacementError::InvalidGeometry); }
@@ -38,7 +52,7 @@ pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) ->
     let available_h = i64::from(work.bottom) - i64::from(work.top) - margin * 2;
     let min_dashboard_w = px(320).max(1);
     let min_call_w = px(300).max(1);
-    if available_h < if dashboard { px(520) } else { px(440) } {
+    if available_h < if dashboard { px(520) } else { px(480) } {
         return Err(PlacementError::InsufficientSpace);
     }
     let (dashboard_w, call_w) = match (dashboard, call) {
@@ -64,8 +78,64 @@ pub fn overlay_rects(work: ScreenRect, dpi: u32, dashboard: bool, call: bool) ->
     };
     Ok(OverlayRects {
         dashboard: if dashboard { Some(rect(i64::from(work.left) + margin, dashboard_w, 700)?) } else { None },
-        call: if call { Some(rect(i64::from(work.right) - margin - call_w, call_w, 540)?) } else { None },
+        call: if call { Some(rect(i64::from(work.right) - margin - call_w, call_w, 720)?) } else { None },
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallBodyRects {
+    /// Status, scope, provider, target dropdown, context label, context input.
+    pub information: [ScreenRect; 6],
+    pub labels: [ScreenRect; 2],
+    pub editors: [ScreenRect; 2],
+    /// Transcript action, AI action, ignore, stop.
+    pub buttons: [ScreenRect; 4],
+}
+
+/// Native client geometry shared by rendering and tests; the header occupies 28 DIP.
+pub fn call_body_rects(width: i32, height: i32, dpi: u32) -> Result<CallBodyRects, PlacementError> {
+    if width <= 0 || height <= 0 || dpi == 0 { return Err(PlacementError::InvalidGeometry); }
+    let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96).max(1);
+    let margin = px(12); let gap = px(4);
+    let content_width = i64::from(width) - margin * 2;
+    let button_width = (content_width - gap) / 2;
+    if button_width <= 0 { return Err(PlacementError::InsufficientSpace); }
+    let rect = |left: i64, top: i64, w: i64, h: i64| -> Result<ScreenRect, PlacementError> {
+        if h <= 0 { return Err(PlacementError::InsufficientSpace); }
+        Ok(ScreenRect { left: left.try_into().map_err(|_| PlacementError::InvalidGeometry)?,
+            top: top.try_into().map_err(|_| PlacementError::InvalidGeometry)?,
+            right: (left + w).try_into().map_err(|_| PlacementError::InvalidGeometry)?,
+            bottom: (top + h).try_into().map_err(|_| PlacementError::InvalidGeometry)? })
+    };
+    let mut y = margin + px(28);
+    let mut information = [ScreenRect { left: 0, top: 0, right: 0, bottom: 0 }; 6];
+    for (i, (control_height, advance)) in [(36, 40), (40, 44), (42, 46), (28, 32), (20, 20), (24, 28)].into_iter().enumerate() {
+        information[i] = rect(margin, y, content_width, px(control_height))?;
+        y += px(advance);
+    }
+    let buttons_y = i64::from(height) - margin - px(28);
+    let mode_y = buttons_y - gap - px(28);
+    let label_height = px(20);
+    let editor_space = mode_y - y - label_height * 2 - gap * 4;
+    // Two readable lines per editor even at the smallest supported client size.
+    let transcript_height = editor_space * 3 / 5;
+    let suggestion_height = editor_space - transcript_height;
+    if transcript_height < px(36) || suggestion_height < px(36) { return Err(PlacementError::InsufficientSpace); }
+    let transcript_label = rect(margin, y, content_width, label_height)?;
+    y += label_height + gap;
+    let transcript = rect(margin, y, content_width, transcript_height)?;
+    y += transcript_height + gap;
+    let suggestion_label = rect(margin, y, content_width, label_height)?;
+    y += label_height + gap;
+    let suggestion = rect(margin, y, content_width, suggestion_height)?;
+    Ok(CallBodyRects { information, labels: [transcript_label, suggestion_label], editors: [transcript, suggestion],
+        buttons: [rect(margin, mode_y, button_width, px(28))?, rect(margin + button_width + gap, mode_y, button_width, px(28))?,
+            rect(margin, buttons_y, button_width, px(28))?, rect(margin + button_width + gap, buttons_y, button_width, px(28))?] })
+}
+
+/// A reader who scrolled into the history keeps their position during updates.
+pub fn scroll_is_at_end(min: i32, max: i32, page: u32, position: i32) -> bool {
+    i64::from(position) >= (i64::from(max) - i64::from(page.saturating_sub(1))).max(i64::from(min))
 }
 
 #[cfg(test)]
@@ -121,5 +191,89 @@ mod tests {
         let huge = ScreenRect { left: i32::MIN, top: i32::MIN, right: i32::MAX, bottom: i32::MAX };
         let layout = overlay_rects(huge, 192, true, true).unwrap();
         assert!(layout.dashboard.unwrap().width() > 0 && layout.call.unwrap().height() > 0);
+    }
+    #[test]
+    fn portrait_secondary_panels_reserve_the_owned_notch_band_at_each_dpi() {
+        let work = ScreenRect { left: -1080, top: 0, right: 0, bottom: 1920 };
+        let main = ScreenRect { left: -860, top: 0, right: -220, bottom: 190 };
+        let available = work_below_main(work, main).unwrap();
+        for dpi in [96, 120, 144] {
+            let layout = overlay_rects(available, dpi, true, true).unwrap();
+            let dashboard = layout.dashboard.unwrap(); let call = layout.call.unwrap();
+            let gap = (16 * i64::from(dpi) + 48) / 96;
+            assert_eq!(i64::from(dashboard.top), i64::from(main.bottom) + gap);
+            assert_eq!(call.top, dashboard.top);
+            assert!(dashboard.right < call.left);
+            assert!(dashboard.left >= work.left && call.right <= work.right);
+            assert!(dashboard.bottom <= work.bottom && call.bottom <= work.bottom);
+        }
+        // A hidden/clipped capsule has the same native rect and keeps the band.
+        assert_eq!(work_below_main(work, main).unwrap(), available);
+    }
+    #[test]
+    fn another_monitor_or_an_edge_touch_does_not_consume_the_top_band() {
+        let work = ScreenRect { left: -1080, top: -1920, right: 0, bottom: 0 };
+        for main in [
+            ScreenRect { left: 0, top: -1920, right: 640, bottom: -1730 },
+            ScreenRect { left: -860, top: 0, right: -220, bottom: 190 },
+        ] {
+            assert_eq!(work_below_main(work, main), Ok(work));
+        }
+        let main = ScreenRect { left: -860, top: -1920, right: -220, bottom: -1730 };
+        let available = work_below_main(work, main).unwrap();
+        let call = overlay_rects(available, 144, false, true).unwrap().call.unwrap();
+        assert_eq!(call.top, -1730 + 24);
+        assert!(call.bottom <= work.bottom);
+    }
+    #[test]
+    fn reserving_the_notch_band_rejects_insufficient_or_invalid_geometry() {
+        let work = ScreenRect { left: -1080, top: 0, right: 0, bottom: 600 };
+        let main = ScreenRect { left: -860, top: 0, right: -220, bottom: 190 };
+        let available = work_below_main(work, main).unwrap();
+        assert_eq!(overlay_rects(available, 96, false, true), Err(PlacementError::InsufficientSpace));
+        assert_eq!(work_below_main(work, ScreenRect { bottom: 600, ..main }), Err(PlacementError::InsufficientSpace));
+        assert_eq!(work_below_main(work, ScreenRect { bottom: 0, ..main }), Err(PlacementError::InvalidGeometry));
+        let extreme = ScreenRect { left: i32::MIN, top: i32::MIN, right: i32::MAX, bottom: i32::MAX };
+        assert!(work_below_main(extreme, ScreenRect { bottom: i32::MIN + 190, ..extreme }).is_ok());
+    }
+    #[test]
+    fn call_controls_keep_labels_editors_and_actions_separate_at_minimum_and_portrait_sizes() {
+        for dpi in [96, 120, 144, 192] {
+            let px = |dip: i64| ((dip * i64::from(dpi) + 48) / 96) as i32;
+            for height in [px(480) - 2, px(720) - 2] {
+                // Native borders consume two physical pixels of the outer window.
+                let width = px(300) - 2;
+                let body = call_body_rects(width, height, dpi).unwrap();
+                let mut bottom = px(12) + px(28);
+                for rect in body.information {
+                    assert!(rect.top >= bottom);
+                    assert!(rect.left >= px(12) && rect.right <= width - px(12));
+                    bottom = rect.bottom;
+                }
+                for i in 0..2 {
+                    assert!(body.labels[i].top >= bottom);
+                    assert!(body.labels[i].bottom < body.editors[i].top);
+                    assert!(body.editors[i].height() >= px(36));
+                    bottom = body.editors[i].bottom;
+                }
+                assert!(bottom < body.buttons[0].top);
+                assert!(body.buttons[0].right < body.buttons[1].left);
+                assert!(body.buttons[0].bottom < body.buttons[2].top);
+                assert!(body.buttons[2].right < body.buttons[3].left);
+                assert!(body.buttons[3].bottom <= height - px(12));
+            }
+        }
+        assert_eq!(call_body_rects(300, 350, 96), Err(PlacementError::InsufficientSpace));
+        assert_eq!(call_body_rects(300, 480, 0), Err(PlacementError::InvalidGeometry));
+    }
+    #[test]
+    fn live_text_follows_only_a_view_already_at_the_end() {
+        assert!(scroll_is_at_end(0, 0, 0, 0));
+        assert!(scroll_is_at_end(0, 20, 30, 0));
+        assert!(scroll_is_at_end(0, 100, 20, 81));
+        assert!(!scroll_is_at_end(0, 100, 20, 80));
+        assert!(!scroll_is_at_end(0, 100, 0, 99));
+        assert!(scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN + 1));
+        assert!(!scroll_is_at_end(i32::MIN, i32::MAX, u32::MAX, i32::MIN));
     }
 }

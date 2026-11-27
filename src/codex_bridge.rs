@@ -2,6 +2,7 @@
 //! Local Codex dashboard client. Thread creation is explicit and sends no user turn.
 mod protocol;
 mod transport;
+pub(crate) use transport::RpcTransport;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
